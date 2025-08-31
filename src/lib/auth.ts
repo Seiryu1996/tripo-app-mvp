@@ -1,0 +1,80 @@
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { NextRequest } from 'next/server'
+import { prisma } from './prisma'
+
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  role: string
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12)
+}
+
+export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+  return bcrypt.compare(password, hashedPassword)
+}
+
+export function generateToken(user: AuthUser): string {
+  return jwt.sign(
+    { 
+      id: user.id, 
+      email: user.email, 
+      name: user.name, 
+      role: user.role 
+    },
+    process.env.NEXTAUTH_SECRET!,
+    { expiresIn: '7d' }
+  )
+}
+
+export function verifyToken(token: string): AuthUser | null {
+  try {
+    return jwt.verify(token, process.env.NEXTAUTH_SECRET!) as AuthUser
+  } catch {
+    return null
+  }
+}
+
+export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+  
+  if (!token) {
+    return null
+  }
+
+  const user = verifyToken(token)
+  if (!user) {
+    return null
+  }
+
+  // データベースでユーザーの存在を確認
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id }
+  })
+
+  return dbUser ? user : null
+}
+
+export async function requireAuth(request: NextRequest): Promise<AuthUser> {
+  const user = await getAuthUser(request)
+  
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+  
+  return user
+}
+
+export async function requireAdmin(request: NextRequest): Promise<AuthUser> {
+  const user = await requireAuth(request)
+  
+  if (user.role !== 'ADMIN') {
+    throw new Error('Admin access required')
+  }
+  
+  return user
+}

@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // 3Dモデル生成履歴
+  models    Model[]
+  
+  @@map("users")
+}
+
+model Model {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String
+  description String?     @db.Text
+  inputType   InputType
+  inputData   String      @db.Text // テキストまたは画像URL
+  status      ModelStatus @default(PENDING)
+  tripoTaskId String?     // Tripo APIのタスクID
+  modelUrl    String?     // 生成された3DモデルのURL
+  previewUrl  String?     // プレビュー画像のURL
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("models")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum InputType {
+  TEXT
+  IMAGE
+}
+
+enum ModelStatus {
+  PENDING    // 処理待ち
+  PROCESSING // 処理中
+  COMPLETED  // 完了
+  FAILED     // 失敗
+}
