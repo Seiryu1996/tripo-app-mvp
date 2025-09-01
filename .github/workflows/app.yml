@@ -20,14 +20,17 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
 
-      - name: Debug - List files after build
+      - name: Fix permissions and debug
         run: |
-          echo "=== Root directory ==="
-          ls -la
-          echo "=== .next directory (if exists) ==="
-          ls -la .next/ || echo ".next directory not found"
-          echo "=== Coverage directory (if exists) ==="
-          ls -la coverage/ || echo "coverage directory not found"
+          echo "=== Before permission fix ==="
+          ls -la .next/
+          echo "=== Fixing permissions ==="
+          sudo chown -R runner:docker .next/
+          sudo chmod -R 755 .next/
+          echo "=== After permission fix ==="
+          ls -la .next/
+          echo "=== Test file access ==="
+          find .next -type f | head -5
 
       - uses: actions/upload-artifact@v4
         with:
@@ -39,7 +42,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: build
-          path: .next/
+          path: .next
           retention-days: 30
           if-no-files-found: warn
 
@@ -56,6 +59,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: static-assets
-          path: public/
+          path: public
           retention-days: 30
           if-no-files-found: ignore
