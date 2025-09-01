@@ -1,7 +1,6 @@
-import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { NextRequest } from 'next/server'
-import { prisma } from './prisma'
+import { UserService } from '@/services/userService'
 
 export interface AuthUser {
   id: string
@@ -10,13 +9,6 @@ export interface AuthUser {
   role: string
 }
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12)
-}
-
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword)
-}
 
 export function generateToken(user: AuthUser): string {
   return jwt.sign(
@@ -52,9 +44,7 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
   }
 
   // データベースでユーザーの存在を確認
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id }
-  })
+  const dbUser = await UserService.findById(user.id)
 
   return dbUser ? user : null
 }

@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireAdmin, hashPassword } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
+import { UserService } from '@/services/userService'
 
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin(request)
-
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
-
+    const users = await UserService.findAll()
     return NextResponse.json({ users })
 
   } catch (error: any) {
@@ -51,9 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // メールアドレスの重複チェック
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    })
+    const existingUser = await UserService.findByEmail(email)
 
     if (existingUser) {
       return NextResponse.json(
@@ -62,22 +47,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const hashedPassword = await hashPassword(password)
-
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role || 'USER'
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
-      }
+    const user = await UserService.create({
+      name,
+      email,
+      password,
+      role: role || 'USER'
     })
 
     return NextResponse.json({

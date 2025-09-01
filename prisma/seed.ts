@@ -73,8 +73,8 @@ async function main() {
       inputType: 'TEXT' as const,
       inputData: 'blue sports car, realistic details, glossy finish',
       status: 'COMPLETED' as const,
-      modelUrl: 'https://example.com/models/blue_car.glb',
-      previewUrl: 'https://example.com/previews/blue_car.jpg',
+      modelUrl: 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.gltf',
+      previewUrl: 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.jpg',
     },
     {
       title: '木製の椅子',
@@ -82,8 +82,8 @@ async function main() {
       inputType: 'TEXT' as const,
       inputData: 'wooden chair, simple design, brown wood texture',
       status: 'COMPLETED' as const,
-      modelUrl: 'https://example.com/models/wooden_chair.glb',
-      previewUrl: 'https://example.com/previews/wooden_chair.jpg',
+      modelUrl: 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.gltf',
+      previewUrl: 'https://threejs.org/examples/models/gltf/DamagedHelmet/DamagedHelmet.jpg',
     },
     {
       title: '赤いリンゴ',

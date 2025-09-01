@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import ModelViewer from '@/components/ModelViewer'
 
 interface Model {
   id: string
@@ -34,6 +35,21 @@ export default function DashboardPage() {
     fetchModels()
   }, [])
 
+  // 生成中のモデルがある場合のみポーリング
+  useEffect(() => {
+    const hasProcessingModels = models.some(model => 
+      model.status === 'PENDING' || model.status === 'PROCESSING'
+    )
+
+    if (!hasProcessingModels) return
+
+    const interval = setInterval(() => {
+      fetchModels()
+    }, 3000) // 3秒ごとに更新
+
+    return () => clearInterval(interval)
+  }, [models])
+
   const checkAuth = async () => {
     const token = localStorage.getItem('token')
     if (!token) {
@@ -59,17 +75,24 @@ export default function DashboardPage() {
   const fetchModels = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/models', {
+      if (!token) return
+      
+      const response = await fetch(`/api/models?t=${Date.now()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        cache: 'no-store'
       })
-
+      
       if (response.ok) {
         const data = await response.json()
-        setModels(data.models)
+        setModels(data.models || [])
+        setError('')
+      } else if (response.status === 401) {
+        router.push('/login')
       }
     } catch (err) {
+      console.error('Failed to fetch models:', err)
       setError('モデル一覧の取得に失敗しました')
     } finally {
       setLoading(false)
@@ -112,6 +135,29 @@ export default function DashboardPage() {
   const handleLogout = () => {
     localStorage.removeItem('token')
     router.push('/')
+  }
+
+  const handleDelete = async (modelId: string) => {
+    if (!confirm('このモデルを削除しますか？')) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/models/${modelId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        fetchModels() // 一覧を更新
+      } else {
+        const data = await response.json()
+        setError(data.error || 'モデルの削除に失敗しました')
+      }
+    } catch (err) {
+      setError('モデルの削除に失敗しました')
+    }
   }
 
   const getStatusText = (status: string) => {
@@ -271,10 +317,20 @@ export default function DashboardPage() {
               models.map((model) => (
                 <div key={model.id} className="bg-white shadow rounded-lg p-6">
                   <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-lg font-medium text-gray-900 truncate">{model.title}</h3>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(model.status)}`}>
-                      {getStatusText(model.status)}
-                    </span>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-medium text-gray-900 truncate">{model.title}</h3>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(model.status)}`}>
+                        {getStatusText(model.status)}
+                      </span>
+                      <button
+                        onClick={() => handleDelete(model.id)}
+                        className="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded border border-red-600 hover:bg-red-50"
+                      >
+                        削除
+                      </button>
+                    </div>
                   </div>
                   
                   {model.description && (
@@ -300,16 +356,83 @@ export default function DashboardPage() {
                     />
                   )}
                   
+                  {/* 3Dモデルプレビュー */}
                   {model.status === 'COMPLETED' && model.modelUrl && (
                     <div className="mt-4">
-                      <a
-                        href={model.modelUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <ModelViewer modelUrl={model.modelUrl} className="mb-3" />
+                      <button
+                        onClick={async () => {
+                          const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+                          const filename = `${model.title}_${timestamp}.glb`
+                          const downloadUrl = `/api/download/model?url=${encodeURIComponent(model.modelUrl)}&filename=${encodeURIComponent(filename)}`
+                          
+                          try {
+                            // 認証付きでfetch
+                            const token = localStorage.getItem('token')
+                            const response = await fetch(downloadUrl, {
+                              headers: {
+                                'Authorization': `Bearer ${token}`
+                              }
+                            })
+                            
+                            if (!response.ok) {
+                              const errorText = await response.text()
+                              console.error('Download API error:', response.status, errorText)
+                              throw new Error(`ダウンロードに失敗しました: ${response.status}`)
+                            }
+                            
+                            // blobを作成してダウンロード
+                            const blob = await response.blob()
+                            const url = window.URL.createObjectURL(blob)
+                            
+                            const link = document.createElement('a')
+                            link.href = url
+                            link.download = filename
+                            document.body.appendChild(link)
+                            link.click()
+                            document.body.removeChild(link)
+                            
+                            // URLを解放
+                            window.URL.revokeObjectURL(url)
+                          } catch (error) {
+                            console.error('Download error:', error)
+                            alert('ダウンロードに失敗しました')
+                          }
+                        }}
                         className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
                       >
                         3Dモデルをダウンロード
-                      </a>
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* 処理中の場合の表示 */}
+                  {model.status === 'PROCESSING' && (
+                    <div className="mt-4">
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                        <span className="text-sm text-blue-600">生成中...</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 待機中の場合の表示 */}
+                  {model.status === 'PENDING' && (
+                    <div className="mt-4">
+                      <div className="flex items-center">
+                        <div className="h-4 w-4 bg-yellow-400 rounded-full mr-2"></div>
+                        <span className="text-sm text-yellow-600">待機中...</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 失敗の場合の表示 */}
+                  {model.status === 'FAILED' && (
+                    <div className="mt-4">
+                      <div className="flex items-center">
+                        <div className="h-4 w-4 bg-red-400 rounded-full mr-2"></div>
+                        <span className="text-sm text-red-600">生成に失敗しました</span>
+                      </div>
                     </div>
                   )}
                   

@@ -202,6 +202,7 @@ export default function AdminPage() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="田中太郎"
                   />
                 </div>
                 <div>
@@ -212,6 +213,7 @@ export default function AdminPage() {
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="user@example.com"
                   />
                 </div>
                 <div>
@@ -224,6 +226,7 @@ export default function AdminPage() {
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required={!editingUser}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder={editingUser ? "変更する場合のみ入力" : "パスワードを設定"}
                   />
                 </div>
                 <div>

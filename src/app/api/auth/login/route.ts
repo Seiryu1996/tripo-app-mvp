@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyPassword, generateToken } from '@/lib/auth'
+import { generateToken } from '@/lib/auth'
+import { UserService } from '@/services/userService'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +13,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email }
-    })
+    const user = await UserService.findByEmail(email)
 
     if (!user) {
       return NextResponse.json(
@@ -24,7 +22,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const isPasswordValid = await verifyPassword(password, user.password)
+    const isPasswordValid = await UserService.verifyPassword(user, password)
 
     if (!isPasswordValid) {
       return NextResponse.json(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireAdmin, hashPassword } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
+import { UserService } from '@/services/userService'
 
 export async function PUT(
   request: NextRequest,
@@ -19,38 +19,20 @@ export async function PUT(
     }
 
     // 他のユーザーが同じメールアドレスを使用していないかチェック
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    })
+    const isDuplicate = await UserService.checkEmailDuplication(email, params.id)
 
-    if (existingUser && existingUser.id !== params.id) {
+    if (isDuplicate) {
       return NextResponse.json(
         { error: 'このメールアドレスは既に使用されています' },
         { status: 400 }
       )
     }
 
-    const updateData: any = {
+    const user = await UserService.updateWithPassword(params.id, {
       name,
       email,
-      role: role || 'USER'
-    }
-
-    // パスワードが入力されている場合のみ更新
-    if (password) {
-      updateData.password = await hashPassword(password)
-    }
-
-    const user = await prisma.user.update({
-      where: { id: params.id },
-      data: updateData,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
-      }
+      role: role || 'USER',
+      password
     })
 
     return NextResponse.json({
@@ -80,10 +62,7 @@ export async function DELETE(
 ) {
   try {
     await requireAdmin(request)
-
-    await prisma.user.delete({
-      where: { id: params.id }
-    })
+    await UserService.delete(params.id)
 
     return NextResponse.json({
       message: 'ユーザーを削除しました'
