@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import ModelViewer from '@/components/ModelViewer'
+import Navigation from '@/components/Navigation'
 
 interface Model {
   id: string
@@ -29,6 +30,7 @@ export default function DashboardPage() {
     inputType: 'TEXT' as 'TEXT' | 'IMAGE',
     inputData: ''
   })
+  const [downloading, setDownloading] = useState<string | null>(null)
 
   useEffect(() => {
     checkAuth()
@@ -132,10 +134,6 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    router.push('/')
-  }
 
   const handleDelete = async (modelId: string) => {
     if (!confirm('このモデルを削除しますか？')) return
@@ -180,6 +178,49 @@ export default function DashboardPage() {
     }
   }
 
+  const handleDownload = async (model: Model) => {
+    if (!model.modelUrl) return
+    
+    setDownloading(model.id)
+    setError('')
+
+    try {
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      const filename = `${model.title}_${timestamp}.glb`
+      const downloadUrl = `/api/download/model?url=${encodeURIComponent(model.modelUrl)}&filename=${encodeURIComponent(filename)}`
+      
+      const token = localStorage.getItem('token')
+      const response = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Download API error:', response.status, errorText)
+        throw new Error(`ダウンロードに失敗しました: ${response.status}`)
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Download error:', error)
+      setError('ダウンロードに失敗しました')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -190,22 +231,10 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <h1 className="text-3xl font-bold text-gray-900">3Dモデル生成</h1>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
-            >
-              ログアウト
-            </button>
-          </div>
-        </div>
-      </div>
+      <Navigation currentPath="/dashboard" />
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+        <div className="px-4 sm:px-0">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-semibold text-gray-900">マイモデル</h2>
             <button
@@ -361,47 +390,18 @@ export default function DashboardPage() {
                     <div className="mt-4">
                       <ModelViewer modelUrl={model.modelUrl} className="mb-3" />
                       <button
-                        onClick={async () => {
-                          const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-                          const filename = `${model.title}_${timestamp}.glb`
-                          const downloadUrl = `/api/download/model?url=${encodeURIComponent(model.modelUrl)}&filename=${encodeURIComponent(filename)}`
-                          
-                          try {
-                            // 認証付きでfetch
-                            const token = localStorage.getItem('token')
-                            const response = await fetch(downloadUrl, {
-                              headers: {
-                                'Authorization': `Bearer ${token}`
-                              }
-                            })
-                            
-                            if (!response.ok) {
-                              const errorText = await response.text()
-                              console.error('Download API error:', response.status, errorText)
-                              throw new Error(`ダウンロードに失敗しました: ${response.status}`)
-                            }
-                            
-                            // blobを作成してダウンロード
-                            const blob = await response.blob()
-                            const url = window.URL.createObjectURL(blob)
-                            
-                            const link = document.createElement('a')
-                            link.href = url
-                            link.download = filename
-                            document.body.appendChild(link)
-                            link.click()
-                            document.body.removeChild(link)
-                            
-                            // URLを解放
-                            window.URL.revokeObjectURL(url)
-                          } catch (error) {
-                            console.error('Download error:', error)
-                            alert('ダウンロードに失敗しました')
-                          }
-                        }}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+                        onClick={() => handleDownload(model)}
+                        disabled={downloading === model.id}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        3Dモデルをダウンロード
+                        {downloading === model.id ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700 mr-2"></div>
+                            ダウンロード中...
+                          </>
+                        ) : (
+                          '3Dモデルをダウンロード'
+                        )}
                       </button>
                     </div>
                   )}
