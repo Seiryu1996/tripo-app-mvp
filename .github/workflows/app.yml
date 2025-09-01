@@ -15,27 +15,47 @@ jobs:
           node-version: 18.x
 
       - run: npm ci
+      - run: npx prisma generate
       - run: npm run lint
       - run: npm run test:coverage
       - run: npm run build
 
+      - name: Debug - List files after build
+        run: |
+          echo "=== Root directory ==="
+          ls -la
+          echo "=== .next directory (if exists) ==="
+          ls -la .next/ || echo ".next directory not found"
+          echo "=== Coverage directory (if exists) ==="
+          ls -la coverage/ || echo "coverage directory not found"
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage/**
+          path: coverage/
           retention-days: 30
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
           name: build
-          path: |
-            .next/**
-            !.next/cache/**
+          path: .next/
           retention-days: 30
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-files
+          path: |
+            package.json
+            package-lock.json
+            next.config.js
+          retention-days: 30
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
           name: static-assets
-          path: public/**
+          path: public/
           retention-days: 30
           if-no-files-found: ignore
