@@ -1,0 +1,24 @@
+name: app
+
+on:
+  push:
+    branches:
+      - develop
+
+defaults:
+  run:
+    working-directory: src
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
