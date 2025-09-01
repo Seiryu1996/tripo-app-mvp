@@ -5,10 +5,6 @@ on:
     branches:
       - develop
 
-defaults:
-  run:
-    working-directory: src
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,17 +16,26 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
-      - run: npm run test
       - run: npm run test:coverage
       - run: npm run build
 
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: src/coverage/**
-          retention-days: 5
+          path: coverage/**
+          retention-days: 30
+
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
-          path: src/dist/index.js
-          retention-days: 5
+          name: build
+          path: |
+            .next/**
+            !.next/cache/**
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: static-assets
+          path: public/**
+          retention-days: 30
+          if-no-files-found: ignore
