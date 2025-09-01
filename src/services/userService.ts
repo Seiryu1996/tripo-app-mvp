@@ -17,6 +17,15 @@ export interface UpdateUserData {
   role?: UserRole
 }
 
+export interface PublicUserData {
+  id: string
+  email: string
+  name: string
+  role: UserRole
+  createdAt: Date
+  updatedAt: Date
+}
+
 export class UserService {
   // メールアドレスでユーザーを取得
   static async findByEmail(email: string): Promise<User | null> {
@@ -33,7 +42,7 @@ export class UserService {
   }
 
   // 全ユーザーを取得（管理者用）
-  static async findAll(): Promise<User[]> {
+  static async findAll(): Promise<PublicUserData[]> {
     return prisma.user.findMany({
       select: {
         id: true,
@@ -44,7 +53,7 @@ export class UserService {
         updatedAt: true
       },
       orderBy: { createdAt: 'desc' }
-    }) as User[]
+    })
   }
 
   // 新しいユーザーを作成
@@ -61,7 +70,7 @@ export class UserService {
   }
 
   // ユーザーを更新
-  static async update(id: string, data: UpdateUserData): Promise<User> {
+  static async update(id: string, data: UpdateUserData): Promise<PublicUserData> {
     return prisma.user.update({
       where: { id },
       data,
@@ -73,11 +82,11 @@ export class UserService {
         createdAt: true,
         updatedAt: true
       }
-    }) as User
+    })
   }
 
   // ユーザー情報を更新（パスワード込み）
-  static async updateWithPassword(id: string, data: UpdateUserData & { password?: string }): Promise<User> {
+  static async updateWithPassword(id: string, data: UpdateUserData & { password?: string }): Promise<PublicUserData> {
     const updateData: any = { ...data }
     
     if (data.password) {
@@ -95,7 +104,7 @@ export class UserService {
         createdAt: true,
         updatedAt: true
       }
-    }) as User
+    })
   }
 
   // ユーザーを削除
