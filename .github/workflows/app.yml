@@ -20,73 +20,17 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
 
-      - name: Debug and create test files
-        run: |
-          echo "=== Working directory ==="
-          pwd
-          echo "=== Directory listing ==="
-          ls -la
-          echo "=== .next exists check ==="
-          if [ -d ".next" ]; then
-            echo ".next directory exists"
-            ls -la .next/
-          else
-            echo ".next directory does not exist"
-          fi
-          echo "=== Create test files ==="
-          mkdir -p test-dir
-          echo "test content" > test-dir/test-file.txt
-          echo "=== Test directory ==="
-          ls -la test-dir/
-          echo "=== Copy .next to next-build ==="
-          cp -r .next next-build
-          ls -la next-build/
-
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage/
+          path: coverage
           retention-days: 30
           if-no-files-found: ignore
 
-      # Test with hidden files enabled
       - uses: actions/upload-artifact@v4
         with:
-          name: build-with-hidden
+          name: build
           path: .next
           include-hidden-files: true
           retention-days: 30
-          if-no-files-found: warn
-
-      # Test with renamed directory (no dot prefix)
-      - uses: actions/upload-artifact@v4
-        with:
-          name: build-renamed
-          path: next-build
-          retention-days: 30
-          if-no-files-found: warn
-
-      # Test with simple test directory
-      - uses: actions/upload-artifact@v4
-        with:
-          name: test-dir
-          path: test-dir
-          retention-days: 5
-          if-no-files-found: warn
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: package-files
-          path: |
-            package.json
-            package-lock.json
-            next.config.js
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: static-assets
-          path: public
-          retention-days: 30
-          if-no-files-found: ignore
+          if-no-files-found: error
