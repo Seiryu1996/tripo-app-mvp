@@ -20,17 +20,20 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
 
-      - name: Fix permissions and debug
+      - name: Debug artifact upload issue
         run: |
-          echo "=== Before permission fix ==="
+          echo "=== Working directory ==="
+          pwd
+          echo "=== .next directory details ==="
           ls -la .next/
-          echo "=== Fixing permissions ==="
-          sudo chown -R runner:docker .next/
-          sudo chmod -R 755 .next/
-          echo "=== After permission fix ==="
-          ls -la .next/
-          echo "=== Test file access ==="
-          find .next -type f | head -5
+          echo "=== .next directory size ==="
+          du -sh .next/
+          echo "=== Test glob pattern ==="
+          ls -la .next* || echo "no .next* files"
+          echo "=== File count in .next ==="
+          find .next -type f | wc -l
+          echo "=== Upload artifact version ==="
+          echo "Using upload-artifact@v4"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -39,10 +42,17 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-v3
+          path: .next
+          retention-days: 30
+          if-no-files-found: warn
+
       - uses: actions/upload-artifact@v4
         with:
-          name: build
-          path: .next
+          name: build-v4
+          path: .next/**/*
           retention-days: 30
           if-no-files-found: warn
 
