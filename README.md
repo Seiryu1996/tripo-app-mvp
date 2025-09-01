@@ -2,6 +2,8 @@
 
 TripoのAPIを使用してテキストや画像から3Dモデルを生成するWebアプリケーション。
 
+[![app](https://github.com/Seiryu1996/tripo-app-mvp/actions/workflows/app.yml/badge.svg)](https://github.com/Seiryu1996/tripo-app-mvp/actions/workflows/app.yml)
+
 ## 技術スタック
 
 - **フロントエンド**: Next.js 14 (App Router)

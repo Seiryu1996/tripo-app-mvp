@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - develop
+  # schedule:
+  #   - cron: '0 12 * * *'
 
 jobs:
   build:
@@ -21,6 +23,7 @@ jobs:
       - run: npm run build
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: coverage
           path: coverage
