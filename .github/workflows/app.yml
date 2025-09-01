@@ -22,3 +22,14 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: src/coverage/**
+          retention-days: 5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: src/dist/index.js
+          retention-days: 5
