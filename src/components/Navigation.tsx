@@ -59,7 +59,7 @@ export default function Navigation({ currentPath }: NavigationProps) {
       <div className="bg-white shadow mb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="text-2xl font-bold text-gray-900">3Dモデル生成</div>
+            <div className="text-2xl font-bold text-gray-900">3D Creator Studio</div>
             <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function Navigation({ currentPath }: NavigationProps) {
       <div className="bg-white shadow mb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="text-2xl font-bold text-gray-900">3Dモデル生成</div>
+            <div className="text-2xl font-bold text-gray-900">3D Creator Studio</div>
             <button
               onClick={handleLogout}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -91,7 +91,7 @@ export default function Navigation({ currentPath }: NavigationProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
-            3Dモデル生成
+            3D Creator Studio
           </Link>
           
           <div className="flex items-center space-x-4">

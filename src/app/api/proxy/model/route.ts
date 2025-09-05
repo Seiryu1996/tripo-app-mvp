@@ -16,8 +16,10 @@ export async function GET(request: NextRequest) {
   try {
     const response = await fetch(decodedUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': '*/*'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Referer': 'https://platform.tripo3d.ai/',
+        'Origin': 'https://platform.tripo3d.ai'
       }
     })
 
@@ -44,6 +46,16 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[Proxy] Error:', error.message)
+    console.error('[Proxy] URL:', decodedUrl)
+    
+    // 403エラーの場合は詳細なエラーメッセージを返す
+    if (error.message.includes('403')) {
+      return NextResponse.json(
+        { error: 'モデルURLの有効期限が切れているか、アクセス権限がありません。モデルを再生成してください。' },
+        { status: 403 }
+      )
+    }
+    
     return NextResponse.json(
       { error: `Failed to fetch model: ${error.message}` },
       { status: 500 }

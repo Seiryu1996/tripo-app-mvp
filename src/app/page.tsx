@@ -53,10 +53,10 @@ export default function Home() {
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Tripo 3D Generator
+            3D Creator Studio
           </h1>
           <p className="text-gray-600 mb-8">
-            テキストや画像から3Dモデルを生成
+            AIで簡単、美しい3Dモデルを生成
           </p>
         </div>
         

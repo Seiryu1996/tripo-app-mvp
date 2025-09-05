@@ -17,6 +17,24 @@ interface Model {
   createdAt: string
 }
 
+// モデルの有効期限をチェックする関数（24時間）
+const isModelExpired = (createdAt: string): boolean => {
+  const created = new Date(createdAt)
+  const now = new Date()
+  const hoursDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60)
+  return hoursDiff > 24
+}
+
+// 有効なモデルのみをフィルタする関数
+const filterValidModels = (models: Model[]): Model[] => {
+  return models.filter(model => {
+    // 未完了のモデルは表示
+    if (model.status !== 'COMPLETED') return true
+    // 完了済みモデルは有効期限をチェック
+    return !isModelExpired(model.createdAt)
+  })
+}
+
 export default function DashboardPage() {
   const [models, setModels] = useState<Model[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,7 +106,9 @@ export default function DashboardPage() {
       
       if (response.ok) {
         const data = await response.json()
-        setModels(data.models || [])
+        // 有効なモデルのみを表示
+        const validModels = filterValidModels(data.models || [])
+        setModels(validModels)
         setError('')
       } else if (response.status === 401) {
         router.push('/login')
@@ -254,6 +274,19 @@ export default function DashboardPage() {
           {showCreateForm && (
             <div className="bg-white shadow rounded-lg p-6 mb-6">
               <h3 className="text-lg font-medium mb-4">新しい3Dモデルを作成</h3>
+              
+              {/* 有効期限の注意書き */}
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-yellow-800 font-medium">重要なお知らせ</span>
+                </div>
+                <p className="text-sm text-yellow-700 mt-1">
+                  生成された3Dモデルは<strong>24時間後</strong>に自動的に期限切れとなり、プレビュー・ダウンロードができなくなります。必要なモデルは早めにダウンロードしてください。
+                </p>
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">タイトル</label>
@@ -334,6 +367,21 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* 有効期限の注意書き（一覧画面用） */}
+          {models.length > 0 && (
+            <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm text-blue-800 font-medium">モデル有効期限について</span>
+              </div>
+              <p className="text-sm text-blue-700 mt-1">
+                生成された3Dモデルは24時間後に自動的に期限切れとなります。期限切れになったモデルは一覧から削除され、プレビュー・ダウンロードができなくなります。
+              </p>
             </div>
           )}
 
