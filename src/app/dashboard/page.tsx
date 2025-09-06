@@ -17,12 +17,12 @@ interface Model {
   createdAt: string
 }
 
-// モデルの有効期限をチェックする関数（24時間）
+// モデルの有効期限をチェックする関数（5分）
 const isModelExpired = (createdAt: string): boolean => {
   const created = new Date(createdAt)
   const now = new Date()
-  const hoursDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60)
-  return hoursDiff > 24
+  const minutesDiff = (now.getTime() - created.getTime()) / (1000 * 60)
+  return minutesDiff > 5
 }
 
 // 有効なモデルのみをフィルタする関数
@@ -284,7 +284,7 @@ export default function DashboardPage() {
                   <span className="text-sm text-yellow-800 font-medium">重要なお知らせ</span>
                 </div>
                 <p className="text-sm text-yellow-700 mt-1">
-                  生成された3Dモデルは<strong>24時間後</strong>に自動的に期限切れとなり、プレビュー・ダウンロードができなくなります。必要なモデルは早めにダウンロードしてください。
+                  生成された3Dモデルは<strong>5分後</strong>に自動的に期限切れとなり、プレビュー・ダウンロードができなくなります。必要なモデルは早めにダウンロードしてください。
                 </p>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -380,7 +380,7 @@ export default function DashboardPage() {
                 <span className="text-sm text-blue-800 font-medium">モデル有効期限について</span>
               </div>
               <p className="text-sm text-blue-700 mt-1">
-                生成された3Dモデルは24時間後に自動的に期限切れとなります。期限切れになったモデルは一覧から削除され、プレビュー・ダウンロードができなくなります。
+                生成された3Dモデルは5分後に自動的に期限切れとなります。期限切れになったモデルは一覧から削除され、プレビュー・ダウンロードができなくなります。
               </p>
             </div>
           )}
