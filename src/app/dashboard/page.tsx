@@ -11,7 +11,7 @@ interface Model {
   description: string
   inputType: 'TEXT' | 'IMAGE'
   inputData: string
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'BANNED'
   modelUrl?: string
   previewUrl?: string
   createdAt: string
@@ -28,7 +28,7 @@ const isModelExpired = (createdAt: string): boolean => {
 // 有効なモデルのみをフィルタする関数
 const filterValidModels = (models: Model[]): Model[] => {
   return models.filter(model => {
-    // 未完了のモデルは表示
+    // 未完了のモデル（PENDING、PROCESSING、FAILED、BANNED）は表示
     if (model.status !== 'COMPLETED') return true
     // 完了済みモデルは有効期限をチェック
     return !isModelExpired(model.createdAt)
@@ -46,7 +46,16 @@ export default function DashboardPage() {
     title: '',
     description: '',
     inputType: 'TEXT' as 'TEXT' | 'IMAGE',
-    inputData: ''
+    inputData: '',
+    // 詳細設定
+    width: '',
+    height: '',
+    depth: '',
+    material: '',
+    color: '',
+    style: '',
+    quality: 'medium' as 'low' | 'medium' | 'high',
+    texture: false
   })
   const [downloading, setDownloading] = useState<string | null>(null)
 
@@ -55,7 +64,7 @@ export default function DashboardPage() {
     fetchModels()
   }, [])
 
-  // 生成中のモデルがある場合のみポーリング
+  // 生成中のモデルがある場合のみポーリング（BANNED、COMPLETED、FAILEDは除外）
   useEffect(() => {
     const hasProcessingModels = models.some(model => 
       model.status === 'PENDING' || model.status === 'PROCESSING'
@@ -144,7 +153,20 @@ export default function DashboardPage() {
       if (response.ok) {
         fetchModels()
         setShowCreateForm(false)
-        setFormData({ title: '', description: '', inputType: 'TEXT', inputData: '' })
+        setFormData({ 
+          title: '', 
+          description: '', 
+          inputType: 'TEXT', 
+          inputData: '',
+          width: '',
+          height: '',
+          depth: '',
+          material: '',
+          color: '',
+          style: '',
+          quality: 'medium',
+          texture: false
+        })
       } else {
         const data = await response.json()
         setError(data.error || '3Dモデル生成の開始に失敗しました')
@@ -184,6 +206,7 @@ export default function DashboardPage() {
       case 'PROCESSING': return '処理中'
       case 'COMPLETED': return '完了'
       case 'FAILED': return '失敗'
+      case 'BANNED': return '禁止コンテンツ'
       default: return status
     }
   }
@@ -194,6 +217,7 @@ export default function DashboardPage() {
       case 'PROCESSING': return 'bg-blue-100 text-blue-800'
       case 'COMPLETED': return 'bg-green-100 text-green-800'
       case 'FAILED': return 'bg-red-100 text-red-800'
+      case 'BANNED': return 'bg-orange-100 text-orange-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -348,6 +372,115 @@ export default function DashboardPage() {
                   )}
                 </div>
 
+                {/* 詳細設定セクション */}
+                <div className="border-t pt-4">
+                  <h4 className="text-md font-medium text-gray-800 mb-3">詳細設定（任意）</h4>
+                  
+                  {/* サイズ設定 */}
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">幅（cm）</label>
+                      <input
+                        type="number"
+                        value={formData.width}
+                        onChange={(e) => setFormData({ ...formData, width: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="10"
+                        min="0.1"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">高さ（cm）</label>
+                      <input
+                        type="number"
+                        value={formData.height}
+                        onChange={(e) => setFormData({ ...formData, height: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="10"
+                        min="0.1"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">奥行き（cm）</label>
+                      <input
+                        type="number"
+                        value={formData.depth}
+                        onChange={(e) => setFormData({ ...formData, depth: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="10"
+                        min="0.1"
+                        step="0.1"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 材質と色 */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">材質</label>
+                      <input
+                        type="text"
+                        value={formData.material}
+                        onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="例: プラスチック、金属、木材"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">色</label>
+                      <input
+                        type="text"
+                        value={formData.color}
+                        onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="例: 青、赤、シルバー"
+                      />
+                    </div>
+                  </div>
+
+                  {/* スタイルと品質 */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">スタイル</label>
+                      <input
+                        type="text"
+                        value={formData.style}
+                        onChange={(e) => setFormData({ ...formData, style: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="例: モダン、クラシック、未来的"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">品質</label>
+                      <select
+                        value={formData.quality}
+                        onChange={(e) => setFormData({ ...formData, quality: e.target.value as 'low' | 'medium' | 'high' })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                      >
+                        <option value="low">低品質（高速）</option>
+                        <option value="medium">中品質（標準）</option>
+                        <option value="high">高品質（詳細）</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* テクスチャ設定 */}
+                  <div className="flex items-center">
+                    <input
+                      id="texture"
+                      type="checkbox"
+                      checked={formData.texture}
+                      onChange={(e) => setFormData({ ...formData, texture: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    />
+                    <label htmlFor="texture" className="ml-2 block text-sm text-gray-700">
+                      テクスチャを含める（処理時間が長くなります）
+                    </label>
+                  </div>
+                </div>
+
                 <div className="flex space-x-3">
                   <button
                     type="submit"
@@ -359,7 +492,20 @@ export default function DashboardPage() {
                     type="button"
                     onClick={() => {
                       setShowCreateForm(false)
-                      setFormData({ title: '', description: '', inputType: 'TEXT', inputData: '' })
+                      setFormData({ 
+                        title: '', 
+                        description: '', 
+                        inputType: 'TEXT', 
+                        inputData: '',
+                        width: '',
+                        height: '',
+                        depth: '',
+                        material: '',
+                        color: '',
+                        style: '',
+                        quality: 'medium',
+                        texture: false
+                      })
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md"
                   >
@@ -481,6 +627,19 @@ export default function DashboardPage() {
                         <div className="h-4 w-4 bg-red-400 rounded-full mr-2"></div>
                         <span className="text-sm text-red-600">生成に失敗しました</span>
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* 禁止コンテンツの場合の表示 */}
+                  {model.status === 'BANNED' && (
+                    <div className="mt-4">
+                      <div className="flex items-center mb-2">
+                        <div className="h-4 w-4 bg-orange-400 rounded-full mr-2"></div>
+                        <span className="text-sm text-orange-600 font-medium">禁止コンテンツが検出されました</span>
+                      </div>
+                      <p className="text-xs text-orange-600">
+                        入力内容がコンテンツポリシーに違反している可能性があります。他の内容でお試しください。
+                      </p>
                     </div>
                   )}
                   

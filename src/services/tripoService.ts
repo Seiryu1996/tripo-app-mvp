@@ -26,11 +26,9 @@ export class TripoService {
   private static apiUrl = process.env.TRIPO_API_URL
 
   // 3Dモデル生成タスクを開始
-  static async startGeneration(modelId: string, inputType: 'TEXT' | 'IMAGE', inputData: string): Promise<void> {
+  // 3Dモデル生成タスクを開始
+  static async startGeneration(modelId: string, inputType: 'TEXT' | 'IMAGE', inputData: string, options?: { texture?: boolean }): Promise<void> {
     try {
-      console.log(`[Tripo] Starting generation for model ${modelId}`)
-
-      // ステータスを処理中に更新
       await ModelService.updateStatus(modelId, 'PROCESSING')
 
       if (!this.apiKey || !this.apiUrl) {
@@ -39,12 +37,10 @@ export class TripoService {
         return
       }
 
-      // リクエストペイロードを作成
       const payload = inputType === 'TEXT' 
-        ? { type: 'text_to_model', prompt: inputData, texture: false }
-        : { type: 'image_to_model', file: inputData, texture: false }
+        ? { type: 'text_to_model', prompt: inputData, texture: options?.texture || false }
+        : { type: 'image_to_model', file: inputData, texture: options?.texture || false }
 
-      // Tripo APIにリクエストを送信
       const response = await fetch(`${this.apiUrl}/task`, {
         method: 'POST',
         headers: {
@@ -58,12 +54,7 @@ export class TripoService {
 
       if (response.ok && data.code === 0 && data.data?.task_id) {
         const taskId = data.data.task_id
-        console.log(`[Tripo] Task created: ${taskId}`)
-        
-        // タスクIDを保存
         await ModelService.setTripoTaskId(modelId, taskId)
-        
-        // ポーリング開始
         this.pollTask(modelId, taskId)
       } else {
         console.error(`[Tripo] Task creation failed:`, data)
@@ -76,6 +67,7 @@ export class TripoService {
     }
   }
 
+  // タスク状況をポーリング
   // タスク状況をポーリング
   private static async pollTask(modelId: string, taskId: string): Promise<void> {
     try {
@@ -92,7 +84,6 @@ export class TripoService {
         const taskStatus = taskData?.status
 
         if (taskStatus === 'success' && taskData?.result) {
-          // 完了処理
           const modelUrl = taskData.result.pbr_model?.url || 
                           taskData.result.model || 
                           taskData.result.model_url
@@ -101,39 +92,34 @@ export class TripoService {
                            taskData.result.preview_url || 
                            taskData.result.generated_image
           
-          console.log(`[Tripo] Task completed for model ${modelId}`)
-          
           if (modelUrl) {
             await ModelService.completeModel(modelId, modelUrl, previewUrl)
           } else {
             await ModelService.updateStatus(modelId, 'FAILED')
           }
           
+        } else if (taskStatus === 'banned' || taskStatus === 'ban') {
+          await ModelService.updateStatus(modelId, 'BANNED')
+          
         } else if (taskStatus === 'failed' || taskStatus === 'failure') {
-          console.log(`[Tripo] Task failed for model ${modelId}`)
           await ModelService.updateStatus(modelId, 'FAILED')
           
         } else if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'queued') {
-          // 5秒後に再ポーリング
           setTimeout(() => this.pollTask(modelId, taskId), 5000)
           
         } else {
-          // 未知のステータス - 5秒後に再ポーリング
           setTimeout(() => this.pollTask(modelId, taskId), 5000)
         }
       } else {
-        // APIエラー
         if (data?.code !== 0) {
           await ModelService.updateStatus(modelId, 'FAILED')
         } else {
-          // HTTPエラー - 60秒後に再試行
           setTimeout(() => this.pollTask(modelId, taskId), 60000)
         }
       }
 
     } catch (error) {
       console.error('[Tripo] Polling error:', error)
-      // 60秒後に再試行
       setTimeout(() => this.pollTask(modelId, taskId), 60000)
     }
   }
