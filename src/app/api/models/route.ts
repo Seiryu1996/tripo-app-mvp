@@ -88,12 +88,12 @@ export async function POST(request: NextRequest) {
       }
       
       // 品質設定
-      const qualityDescriptions = {
+      const qualityDescriptions: { [key: string]: string } = {
         low: 'simple design',
         medium: 'balanced detail',
         high: 'highly detailed, professional quality'
       }
-      if (quality) {
+      if (quality && qualityDescriptions[quality]) {
         details.push(qualityDescriptions[quality])
       }
       
