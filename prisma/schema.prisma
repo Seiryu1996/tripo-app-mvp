@@ -56,4 +56,5 @@ enum ModelStatus {
   PROCESSING // 処理中
   COMPLETED  // 完了
   FAILED     // 失敗
+  BANNED     // 禁止コンテンツ
 }
