@@ -15,8 +15,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - run: npm ci
+      - name: Configure npm (retries, registry)
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-maxtimeout 600000
+          npm config set fetch-retry-mintimeout 20000
+          npm config set registry ${NPM_REGISTRY_URL:-https://registry.npmjs.org/}
+        env:
+          NPM_REGISTRY_URL: ${{ secrets.NPM_REGISTRY_URL }}
+
+      - name: Install dependencies (retry)
+        run: |
+          for i in 1 2 3; do
+            npm ci --no-audit --no-fund && break || sleep $((i*10));
+          done
       - run: npx prisma generate
       - run: npm run lint
       - run: npm run test:coverage
