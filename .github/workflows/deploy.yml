@@ -1,0 +1,78 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
+  REPOSITORY: ${{ secrets.ARTIFACT_REPOSITORY }}
+  IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REPOSITORY }}/${{ secrets.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        if: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER && secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Authenticate to Google Cloud (Service Account Key)
+        if: ${{ !secrets.GCP_WORKLOAD_IDENTITY_PROVIDER && secrets.GCP_SA_KEY }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build Docker image (production)
+        run: |
+          docker build -f Dockerfile.production -t "$IMAGE" .
+
+      - name: Push image to Artifact Registry
+        run: |
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          region: ${{ env.REGION }}
+          service: ${{ env.SERVICE }}
+          image: ${{ env.IMAGE }}
+          allow-unauthenticated: true
+          # Optionally set env vars here or manage via console/infra as code
+          # env_vars: |
+          #   NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL }}
+          #   NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+          #   DATABASE_URL=${{ secrets.DATABASE_URL }}
+          #   TRIPO_API_KEY=${{ secrets.TRIPO_API_KEY }}
+          #   TRIPO_API_URL=${{ secrets.TRIPO_API_URL }}
+          #   ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+          #   ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+
+      - name: Show Cloud Run URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
+
