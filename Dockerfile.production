@@ -5,24 +5,25 @@ RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
-# Ensure production mode for runtime
-ENV NODE_ENV=production
-
 # Copy package manifests and install dependencies
 COPY package*.json ./
-RUN npm ci
+# Configure npm for more resilient installs, then install all deps (incl. dev)
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-maxtimeout 600000 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm ci
 
 # Copy the rest of the app
 COPY . .
 
-# Generate Prisma client and build Next.js app
+# Generate Prisma client and build Next.js app (prisma is a devDependency)
 RUN npx prisma generate \
-  && npm run build
+  && npm run build \
+  && npm prune --omit=dev
 
-# Cloud Run expects the app to listen on $PORT (default 8080)
-ENV PORT=8080
+ENV NODE_ENV=production \
+    PORT=8080
 EXPOSE 8080
 
 # Start the Next.js server in production
 CMD ["npm", "run", "start", "--", "-p", "8080"]
-
