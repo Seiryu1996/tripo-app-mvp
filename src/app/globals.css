@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* グローバルなスタイル設定 */
+body {
+  color: #1f2937; /* text-gray-800 */
+  background-color: #f9fafb; /* bg-gray-50 */
+}
+
+/* 入力フィールドの統一スタイル */
+input, textarea, select {
+  color: #1f2937 !important; /* text-gray-800 */
+  background-color: #ffffff !important; /* bg-white */
+}
+
+/* プレースホルダーの色 */
+input::placeholder, textarea::placeholder {
+  color: #6b7280 !important; /* text-gray-500 */
+}
+
+/* フォーカス時のスタイル */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #3b82f6; /* border-blue-500 */
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
