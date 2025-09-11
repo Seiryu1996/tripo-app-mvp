@@ -15,6 +15,10 @@ env:
   SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
   REPOSITORY: ${{ secrets.ARTIFACT_REPOSITORY }}
   IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REPOSITORY }}/${{ secrets.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+  # Map secrets to env so we can use them in `if:` expressions
+  GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  GCP_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
 jobs:
   build-and-deploy:
@@ -24,18 +28,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate auth inputs
+        run: |
+          if [ -n "${GCP_WORKLOAD_IDENTITY_PROVIDER}" ] && [ -n "${GCP_SERVICE_ACCOUNT_EMAIL}" ]; then
+            echo "Using Workload Identity Federation";
+          elif [ -n "${GCP_SA_KEY}" ]; then
+            echo "Using Service Account key";
+          else
+            echo "Error: Provide either WIF (GCP_WORKLOAD_IDENTITY_PROVIDER + GCP_SERVICE_ACCOUNT_EMAIL) or GCP_SA_KEY as secrets." >&2
+            exit 1;
+          fi
+
       - name: Authenticate to Google Cloud (Workload Identity Federation)
-        if: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER && secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+        if: env.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && env.GCP_SERVICE_ACCOUNT_EMAIL != ''
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT_EMAIL }}
 
       - name: Authenticate to Google Cloud (Service Account Key)
-        if: ${{ !secrets.GCP_WORKLOAD_IDENTITY_PROVIDER && secrets.GCP_SA_KEY }}
+        if: env.GCP_WORKLOAD_IDENTITY_PROVIDER == '' && env.GCP_SA_KEY != ''
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ env.GCP_SA_KEY }}
 
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -75,4 +90,3 @@ jobs:
 
       - name: Show Cloud Run URL
         run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
-
