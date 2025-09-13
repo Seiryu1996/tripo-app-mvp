@@ -46,7 +46,11 @@ describe('LoginPage', () => {
   afterAll(async () => {
     // テスト完了後に後片付け
     await cleanupTestUsers()
-    await prisma.$disconnect()
+    try {
+      if (process.env.DATABASE_URL) {
+        await prisma.$disconnect()
+      }
+    } catch {}
   })
 
   beforeEach(() => {
