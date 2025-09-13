@@ -180,8 +180,9 @@ export default function AdminPage() {
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">名前</label>
+                  <label htmlFor="admin-name" className="block text-sm font-medium text-gray-700">名前</label>
                   <input
+                    id="admin-name"
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -191,8 +192,9 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">メールアドレス</label>
+                  <label htmlFor="admin-email" className="block text-sm font-medium text-gray-700">メールアドレス</label>
                   <input
+                    id="admin-email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -202,10 +204,11 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="admin-password" className="block text-sm font-medium text-gray-700">
                     パスワード {editingUser && '(変更する場合のみ入力)'}
                   </label>
                   <input
+                    id="admin-password"
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -215,8 +218,9 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">権限</label>
+                  <label htmlFor="admin-role" className="block text-sm font-medium text-gray-700">権限</label>
                   <select
+                    id="admin-role"
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
