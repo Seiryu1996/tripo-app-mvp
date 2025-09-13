@@ -53,6 +53,12 @@ describe('AdminPage', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'))
   })
 
+  test('権限チェックでレスポンスok=falseでもログインへリダイレクト', async () => {
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+    render(<AdminPage />)
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'))
+  })
+
   test('初期ロードでユーザー一覧を表示', async () => {
     // /api/auth/me -> ADMIN
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
@@ -77,6 +83,20 @@ describe('AdminPage', () => {
       expect(screen.getByText('b@example.com')).toBeInTheDocument()
       expect(screen.getByText('管理者')).toBeInTheDocument()
       expect(screen.getByText('一般ユーザー')).toBeInTheDocument()
+    })
+  })
+
+  test('ユーザー一覧APIがok=falseでも処理が継続する（else分岐）', async () => {
+    // me -> ADMIN
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
+    // users -> ok=false
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+
+    render(<AdminPage />)
+    await waitFor(() => {
+      expect(screen.getByText('ユーザー管理')).toBeInTheDocument()
+      // ユーザー行が描画されないこと（存在しない名前を確認）
+      expect(screen.queryByText('A')).not.toBeInTheDocument()
     })
   })
 
@@ -228,6 +248,27 @@ describe('AdminPage', () => {
     // 失敗レス
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({ error: '操作に失敗しました' }) })
     await user.click(screen.getByRole('button', { name: '更新' }))
+    await waitFor(() => expect(screen.getByText('操作に失敗しました')).toBeInTheDocument())
+  })
+
+  test('作成失敗（エラー文言なし）でフォールバックの「操作に失敗しました」を表示', async () => {
+    const user = userEvent.setup()
+    // me
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
+    // initial users
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+
+    render(<AdminPage />)
+    await waitFor(() => screen.getByText('ユーザー管理'))
+
+    await user.click(screen.getByRole('button', { name: '新規ユーザー作成' }))
+    await user.type(screen.getByPlaceholderText('田中太郎'), 'NoErr')
+    await user.type(screen.getByPlaceholderText('user@example.com'), 'noerr@example.com')
+    await user.type(screen.getByPlaceholderText('パスワードを設定'), 'P@ss')
+
+    // POST fails without error field
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+    await user.click(screen.getByRole('button', { name: '作成' }))
     await waitFor(() => expect(screen.getByText('操作に失敗しました')).toBeInTheDocument())
   })
 
