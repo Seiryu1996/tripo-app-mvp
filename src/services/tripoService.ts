@@ -25,8 +25,6 @@ export class TripoService {
   private static apiKey = process.env.TRIPO_API_KEY
   private static apiUrl = process.env.TRIPO_API_URL
 
-  // 3Dモデル生成タスクを開始
-  // 3Dモデル生成タスクを開始
   static async startGeneration(modelId: string, inputType: 'TEXT' | 'IMAGE', inputData: string, options?: { texture?: boolean }): Promise<void> {
     try {
       await ModelService.updateStatus(modelId, 'PROCESSING')
@@ -67,8 +65,6 @@ export class TripoService {
     }
   }
 
-  // タスク状況をポーリング
-  // タスク状況をポーリング
   private static async pollTask(modelId: string, taskId: string): Promise<void> {
     try {
       const response = await fetch(`${this.apiUrl}/task/${taskId}`, {

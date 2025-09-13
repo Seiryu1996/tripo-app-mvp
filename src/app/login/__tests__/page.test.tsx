@@ -3,6 +3,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/navigation'
 import LoginPage from '../page'
+import { prisma } from '@/lib/prisma'
+import { 
+  createTestUser, 
+  createTestAdmin, 
+  cleanupTestUsers, 
+  TEST_USER_EMAIL, 
+  TEST_ADMIN_EMAIL, 
+  TEST_USER_PASSWORD 
+} from '../../../test/utils/userTestUtils'
 
 // Next.js のルーターをモック
 jest.mock('next/navigation', () => ({
@@ -27,6 +36,23 @@ const mockPush = jest.fn()
 const mockRouter = { push: mockPush }
 
 describe('LoginPage', () => {
+  beforeAll(async () => {
+    // 事前にテスト用ユーザー/管理者を作成
+    await cleanupTestUsers()
+    await createTestUser()
+    await createTestAdmin()
+  })
+
+  afterAll(async () => {
+    // テスト完了後に後片付け
+    await cleanupTestUsers()
+    try {
+      if (process.env.DATABASE_URL) {
+        await prisma.$disconnect()
+      }
+    } catch {}
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
@@ -65,11 +91,11 @@ describe('LoginPage', () => {
       const emailInput = screen.getByLabelText('メールアドレス')
       const passwordInput = screen.getByLabelText('パスワード')
       
-      await user.type(emailInput, 'test@example.com')
-      await user.type(passwordInput, 'password123')
+      await user.type(emailInput, TEST_USER_EMAIL)
+      await user.type(passwordInput, TEST_USER_PASSWORD)
       
-      expect(emailInput).toHaveValue('test@example.com')
-      expect(passwordInput).toHaveValue('password123')
+      expect(emailInput).toHaveValue(TEST_USER_EMAIL)
+      expect(passwordInput).toHaveValue(TEST_USER_PASSWORD)
     })
   })
 
@@ -82,7 +108,7 @@ describe('LoginPage', () => {
         ok: true,
         json: async () => ({
           token: 'mock-token',
-          user: { id: '1', role: 'USER', email: 'test@example.com' }
+          user: { id: '1', role: 'USER', email: TEST_USER_EMAIL }
         }),
       })
       
@@ -92,15 +118,15 @@ describe('LoginPage', () => {
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
       
-      await user.type(emailInput, 'test@example.com')
-      await user.type(passwordInput, 'password123')
+      await user.type(emailInput, TEST_USER_EMAIL)
+      await user.type(passwordInput, TEST_USER_PASSWORD)
       await user.click(submitButton)
       
       await waitFor(() => {
         expect(fetch).toHaveBeenCalledWith('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'test@example.com', password: 'password123' })
+          body: JSON.stringify({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD })
         })
       })
       
@@ -117,7 +143,7 @@ describe('LoginPage', () => {
         ok: true,
         json: async () => ({
           token: 'mock-admin-token',
-          user: { id: '1', role: 'ADMIN', email: 'admin@example.com' }
+          user: { id: '1', role: 'ADMIN', email: TEST_ADMIN_EMAIL }
         }),
       })
       
@@ -127,8 +153,8 @@ describe('LoginPage', () => {
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
       
-      await user.type(emailInput, 'admin@example.com')
-      await user.type(passwordInput, 'admin123')
+      await user.type(emailInput, TEST_ADMIN_EMAIL)
+      await user.type(passwordInput, TEST_USER_PASSWORD)
       await user.click(submitButton)
       
       await waitFor(() => {
@@ -155,12 +181,34 @@ describe('LoginPage', () => {
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
       
-      await user.type(emailInput, 'wrong@example.com')
+      await user.type(emailInput, 'invalid@example.invalid')
       await user.type(passwordInput, 'wrongpassword')
       await user.click(submitButton)
       
       await waitFor(() => {
         expect(screen.getByText('メールアドレスまたはパスワードが間違っています')).toBeInTheDocument()
+      })
+    })
+
+    test('APIがエラーメッセージを返さない場合は汎用文言を表示する', async () => {
+      const user = userEvent.setup()
+      ;(fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({})
+      })
+
+      render(<LoginPage />)
+
+      const emailInput = screen.getByLabelText('メールアドレス')
+      const passwordInput = screen.getByLabelText('パスワード')
+      const submitButton = screen.getByRole('button', { name: 'ログイン' })
+
+      await user.type(emailInput, 'fallback@example.com')
+      await user.type(passwordInput, 'badpass')
+      await user.click(submitButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('ログインに失敗しました')).toBeInTheDocument()
       })
     })
 
@@ -175,8 +223,8 @@ describe('LoginPage', () => {
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
       
-      await user.type(emailInput, 'test@example.com')
-      await user.type(passwordInput, 'password123')
+      await user.type(emailInput, TEST_USER_EMAIL)
+      await user.type(passwordInput, TEST_USER_PASSWORD)
       await user.click(submitButton)
       
       await waitFor(() => {
@@ -203,8 +251,8 @@ describe('LoginPage', () => {
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button')
       
-      await user.type(emailInput, 'test@example.com')
-      await user.type(passwordInput, 'password123')
+      await user.type(emailInput, TEST_USER_EMAIL)
+      await user.type(passwordInput, TEST_USER_PASSWORD)
       await user.click(submitButton)
       
       // ローディング状態を確認
@@ -224,6 +272,17 @@ describe('LoginPage', () => {
   })
 
   describe('既存認証テスト', () => {
+    test('チェック時にレスポンスがokでない場合はリダイレクトしない', async () => {
+      mockLocalStorage.getItem.mockReturnValue('token')
+      ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+
+      render(<LoginPage />)
+
+      // push は呼ばれない
+      await waitFor(() => {
+        expect(mockPush).not.toHaveBeenCalled()
+      })
+    })
     test('有効なトークンがある場合、適切なページにリダイレクトされる（一般ユーザー）', async () => {
       mockLocalStorage.getItem.mockReturnValue('valid-token')
       
@@ -232,7 +291,7 @@ describe('LoginPage', () => {
         json: async () => ({
           id: '1',
           role: 'USER',
-          email: 'test@example.com'
+          email: TEST_USER_EMAIL
         }),
       })
       
@@ -254,7 +313,7 @@ describe('LoginPage', () => {
         json: async () => ({
           id: '1',
           role: 'ADMIN',
-          email: 'admin@example.com'
+          email: TEST_ADMIN_EMAIL
         }),
       })
       
@@ -324,7 +383,7 @@ describe('LoginPage', () => {
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
       
       // 最初の失敗ログイン
-      await user.type(emailInput, 'test@example.com')
+      await user.type(emailInput, TEST_USER_EMAIL)
       await user.type(passwordInput, 'wrong')
       await user.click(submitButton)
       

@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const [submitting, setSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     title: '',
@@ -133,6 +134,7 @@ export default function DashboardPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (submitting) return
 
     if (!formData.title || !formData.inputData) {
       setError('タイトルと入力データは必須です')
@@ -140,6 +142,7 @@ export default function DashboardPage() {
     }
 
     try {
+      setSubmitting(true)
       const token = localStorage.getItem('token')
       const response = await fetch('/api/models', {
         method: 'POST',
@@ -173,6 +176,8 @@ export default function DashboardPage() {
       }
     } catch {
       setError('3Dモデル生成の開始に失敗しました')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -283,7 +288,8 @@ export default function DashboardPage() {
             <h2 className="text-2xl font-semibold text-gray-900">マイモデル</h2>
             <button
               onClick={() => setShowCreateForm(!showCreateForm)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+              disabled={submitting}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {showCreateForm ? 'キャンセル' : '新しいモデルを作成'}
             </button>
@@ -313,8 +319,9 @@ export default function DashboardPage() {
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">タイトル</label>
+                  <label htmlFor="dash-title" className="block text-sm font-medium text-gray-700">タイトル</label>
                   <input
+                    id="dash-title"
                     type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -325,8 +332,9 @@ export default function DashboardPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">説明（任意）</label>
+                  <label htmlFor="dash-description" className="block text-sm font-medium text-gray-700">説明（任意）</label>
                   <textarea
+                    id="dash-description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -336,8 +344,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">入力タイプ</label>
+                  <label htmlFor="dash-input-type" className="block text-sm font-medium text-gray-700">入力タイプ</label>
                   <select
+                    id="dash-input-type"
                     value={formData.inputType}
                     onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'TEXT' | 'IMAGE' })}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -348,11 +357,12 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor={formData.inputType === 'TEXT' ? 'dash-input-text' : 'dash-input-url'} className="block text-sm font-medium text-gray-700">
                     {formData.inputType === 'TEXT' ? 'テキストプロンプト' : '画像URL'}
                   </label>
                   {formData.inputType === 'TEXT' ? (
                     <textarea
+                      id="dash-input-text"
                       value={formData.inputData}
                       onChange={(e) => setFormData({ ...formData, inputData: e.target.value })}
                       required
@@ -362,6 +372,7 @@ export default function DashboardPage() {
                     />
                   ) : (
                     <input
+                      id="dash-input-url"
                       type="url"
                       value={formData.inputData}
                       onChange={(e) => setFormData({ ...formData, inputData: e.target.value })}
@@ -379,8 +390,9 @@ export default function DashboardPage() {
                   {/* サイズ設定 */}
                   <div className="grid grid-cols-3 gap-3 mb-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">幅（cm）</label>
+                      <label htmlFor="dash-width" className="block text-sm font-medium text-gray-700">幅（cm）</label>
                       <input
+                        id="dash-width"
                         type="number"
                         value={formData.width}
                         onChange={(e) => setFormData({ ...formData, width: e.target.value })}
@@ -391,8 +403,9 @@ export default function DashboardPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">高さ（cm）</label>
+                      <label htmlFor="dash-height" className="block text-sm font-medium text-gray-700">高さ（cm）</label>
                       <input
+                        id="dash-height"
                         type="number"
                         value={formData.height}
                         onChange={(e) => setFormData({ ...formData, height: e.target.value })}
@@ -403,8 +416,9 @@ export default function DashboardPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">奥行き（cm）</label>
+                      <label htmlFor="dash-depth" className="block textsm font-medium text-gray-700">奥行き（cm）</label>
                       <input
+                        id="dash-depth"
                         type="number"
                         value={formData.depth}
                         onChange={(e) => setFormData({ ...formData, depth: e.target.value })}
@@ -419,8 +433,9 @@ export default function DashboardPage() {
                   {/* 材質と色 */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">材質</label>
+                      <label htmlFor="dash-material" className="block text-sm font-medium text-gray-700">材質</label>
                       <input
+                        id="dash-material"
                         type="text"
                         value={formData.material}
                         onChange={(e) => setFormData({ ...formData, material: e.target.value })}
@@ -429,8 +444,9 @@ export default function DashboardPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">色</label>
+                      <label htmlFor="dash-color" className="block text-sm font-medium text-gray-700">色</label>
                       <input
+                        id="dash-color"
                         type="text"
                         value={formData.color}
                         onChange={(e) => setFormData({ ...formData, color: e.target.value })}
@@ -443,8 +459,9 @@ export default function DashboardPage() {
                   {/* スタイルと品質 */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">スタイル</label>
+                      <label htmlFor="dash-style" className="block text-sm font-medium text-gray-700">スタイル</label>
                       <input
+                        id="dash-style"
                         type="text"
                         value={formData.style}
                         onChange={(e) => setFormData({ ...formData, style: e.target.value })}
@@ -453,8 +470,9 @@ export default function DashboardPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">品質</label>
+                      <label htmlFor="dash-quality" className="block text-sm font-medium text-gray-700">品質</label>
                       <select
+                        id="dash-quality"
                         value={formData.quality}
                         onChange={(e) => setFormData({ ...formData, quality: e.target.value as 'low' | 'medium' | 'high' })}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -484,9 +502,17 @@ export default function DashboardPage() {
                 <div className="flex space-x-3">
                   <button
                     type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                    disabled={submitting}
+                    className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    生成開始
+                    {submitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        開始中...
+                      </>
+                    ) : (
+                      '生成開始'
+                    )}
                   </button>
                   <button
                     type="button"
@@ -507,7 +533,8 @@ export default function DashboardPage() {
                         texture: false
                       })
                     }}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md"
+                    disabled={submitting}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     キャンセル
                   </button>
