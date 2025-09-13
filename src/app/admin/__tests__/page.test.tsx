@@ -113,6 +113,25 @@ describe('AdminPage', () => {
     })
   })
 
+  test('作成時にネットワークエラーでキャッチ分岐を通る', async () => {
+    const user = userEvent.setup()
+    // me
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
+    // initial users
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+
+    render(<AdminPage />)
+    await waitFor(() => screen.getByText('ユーザー管理'))
+    await user.click(screen.getByRole('button', { name: '新規ユーザー作成' }))
+    await user.type(screen.getByPlaceholderText('田中太郎'), 'Err User')
+    await user.type(screen.getByPlaceholderText('user@example.com'), 'err@example.com')
+    await user.type(screen.getByPlaceholderText('パスワードを設定'), 'pass')
+    // Throw on fetch
+    ;(fetch as jest.Mock).mockRejectedValueOnce(new Error('network'))
+    await user.click(screen.getByRole('button', { name: '作成' }))
+    await waitFor(() => expect(screen.getByText('操作に失敗しました')).toBeInTheDocument())
+  })
+
   test('編集ボタンでフォームに値を反映し、更新成功で閉じる', async () => {
     const user = userEvent.setup()
     // me
@@ -256,6 +275,23 @@ describe('AdminPage', () => {
     await user.click(screen.getByRole('button', { name: '削除' }))
     await waitFor(() => expect(screen.getByText('削除に失敗しました')).toBeInTheDocument())
 
+    confirmSpy.mockRestore()
+  })
+
+  test('削除時にネットワークエラーでキャッチ分岐を通る', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+    // me
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
+    // initial users
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }] }) })
+
+    render(<AdminPage />)
+    await waitFor(() => screen.getByText('X'))
+    // Throw on delete
+    ;(fetch as jest.Mock).mockRejectedValueOnce(new Error('network'))
+    await user.click(screen.getByRole('button', { name: '削除' }))
+    await waitFor(() => expect(screen.getByText('削除に失敗しました')).toBeInTheDocument())
     confirmSpy.mockRestore()
   })
 

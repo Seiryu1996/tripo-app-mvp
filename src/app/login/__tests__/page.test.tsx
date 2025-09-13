@@ -190,6 +190,28 @@ describe('LoginPage', () => {
       })
     })
 
+    test('APIがエラーメッセージを返さない場合は汎用文言を表示する', async () => {
+      const user = userEvent.setup()
+      ;(fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({})
+      })
+
+      render(<LoginPage />)
+
+      const emailInput = screen.getByLabelText('メールアドレス')
+      const passwordInput = screen.getByLabelText('パスワード')
+      const submitButton = screen.getByRole('button', { name: 'ログイン' })
+
+      await user.type(emailInput, 'fallback@example.com')
+      await user.type(passwordInput, 'badpass')
+      await user.click(submitButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('ログインに失敗しました')).toBeInTheDocument()
+      })
+    })
+
     test('ネットワークエラー時に汎用エラーメッセージが表示される', async () => {
       const user = userEvent.setup()
       
