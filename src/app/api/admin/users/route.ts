@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { UserService } from '@/services/userService'
-
-// APIルートを動的として明示的に指定
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
@@ -40,7 +38,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // メールアドレスの重複チェック
     const existingUser = await UserService.findByEmail(email)
 
     if (existingUser) {

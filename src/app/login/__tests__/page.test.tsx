@@ -13,12 +13,10 @@ import {
   TEST_USER_PASSWORD 
 } from '../../../test/utils/userTestUtils'
 
-// Next.js のルーターをモック
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }))
 
-// localStorage をモック
 const mockLocalStorage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -29,7 +27,6 @@ Object.defineProperty(window, 'localStorage', {
   value: mockLocalStorage,
 })
 
-// fetchをモック
 global.fetch = jest.fn()
 
 const mockPush = jest.fn()
@@ -37,14 +34,12 @@ const mockRouter = { push: mockPush }
 
 describe('LoginPage', () => {
   beforeAll(async () => {
-    // 事前にテスト用ユーザー/管理者を作成
     await cleanupTestUsers()
     await createTestUser()
     await createTestAdmin()
   })
 
   afterAll(async () => {
-    // テスト完了後に後片付け
     await cleanupTestUsers()
     try {
       if (process.env.DATABASE_URL) {
@@ -56,7 +51,7 @@ describe('LoginPage', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
-    mockLocalStorage.getItem.mockReturnValue(null) // デフォルトでトークンなし
+    mockLocalStorage.getItem.mockReturnValue(null)
     ;(fetch as jest.Mock).mockClear()
   })
 
@@ -102,8 +97,6 @@ describe('LoginPage', () => {
   describe('ログイン成功時のテスト', () => {
     test('一般ユーザーのログイン成功時にダッシュボードにリダイレクトされる', async () => {
       const user = userEvent.setup()
-      
-      // API レスポンスをモック
       ;(fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -236,8 +229,6 @@ describe('LoginPage', () => {
   describe('ローディング状態のテスト', () => {
     test('ログイン中はボタンが無効になりローディングテキストが表示される', async () => {
       const user = userEvent.setup()
-      
-      // 遅延を持つレスポンスをモック
       let resolvePromise: (value: any) => void
       const fetchPromise = new Promise((resolve) => {
         resolvePromise = resolve
@@ -254,12 +245,9 @@ describe('LoginPage', () => {
       await user.type(emailInput, TEST_USER_EMAIL)
       await user.type(passwordInput, TEST_USER_PASSWORD)
       await user.click(submitButton)
-      
-      // ローディング状態を確認
       expect(screen.getByText('ログイン中...')).toBeInTheDocument()
       expect(submitButton).toBeDisabled()
       
-      // プロミスを解決
       resolvePromise!({
         ok: true,
         json: async () => ({ token: 'token', user: { role: 'USER' } })
@@ -278,7 +266,6 @@ describe('LoginPage', () => {
 
       render(<LoginPage />)
 
-      // push は呼ばれない
       await waitFor(() => {
         expect(mockPush).not.toHaveBeenCalled()
       })
@@ -346,15 +333,11 @@ describe('LoginPage', () => {
       const emailInput = screen.getByLabelText('メールアドレス')
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
-      
-      // required属性が設定されていることを確認
       expect(emailInput).toBeRequired()
       expect(passwordInput).toBeRequired()
       
-      // 空の状態でsubmitしようとする
       await user.click(submitButton)
       
-      // APIが呼ばれないことを確認（HTMLバリデーションで止まる）
       expect(fetch).not.toHaveBeenCalled()
     })
 
@@ -369,8 +352,6 @@ describe('LoginPage', () => {
   describe('エラー状態のクリア', () => {
     test('エラー表示後に再度フォーム送信するとエラーがクリアされる', async () => {
       const user = userEvent.setup()
-      
-      // 最初は失敗のレスポンス
       ;(fetch as jest.Mock).mockResolvedValueOnce({
         ok: false,
         json: async () => ({ error: 'ログインエラー' }),
@@ -381,8 +362,6 @@ describe('LoginPage', () => {
       const emailInput = screen.getByLabelText('メールアドレス')
       const passwordInput = screen.getByLabelText('パスワード')
       const submitButton = screen.getByRole('button', { name: 'ログイン' })
-      
-      // 最初の失敗ログイン
       await user.type(emailInput, TEST_USER_EMAIL)
       await user.type(passwordInput, 'wrong')
       await user.click(submitButton)
@@ -390,8 +369,6 @@ describe('LoginPage', () => {
       await waitFor(() => {
         expect(screen.getByText('ログインエラー')).toBeInTheDocument()
       })
-      
-      // 2回目は成功のレスポンス
       ;(fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -400,12 +377,10 @@ describe('LoginPage', () => {
         }),
       })
       
-      // パスワードを変更して再送信
       await user.clear(passwordInput)
       await user.type(passwordInput, 'correct')
       await user.click(submitButton)
       
-      // エラーメッセージが消えることを確認
       await waitFor(() => {
         expect(screen.queryByText('ログインエラー')).not.toBeInTheDocument()
       })

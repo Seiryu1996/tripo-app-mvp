@@ -18,7 +18,6 @@ export async function PUT(
       )
     }
 
-    // 他のユーザーが同じメールアドレスを使用していないかチェック
     const isDuplicate = await UserService.checkEmailDuplication(email, params.id)
 
     if (isDuplicate) {
@@ -61,7 +60,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireAdmin(request)
+    const currentUser = await requireAdmin(request)
+
+    if (params.id === currentUser.id) {
+      return NextResponse.json(
+        { error: '自分自身のアカウントは削除できません' },
+        { status: 400 }
+      )
+    }
     await UserService.delete(params.id)
 
     return NextResponse.json({

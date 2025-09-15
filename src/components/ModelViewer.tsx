@@ -22,12 +22,10 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
   useEffect(() => {
     if (!mountRef.current) return
 
-    // シーンの初期化
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0xf0f0f0)
     sceneRef.current = scene
 
-    // カメラの設定
     const camera = new THREE.PerspectiveCamera(
       75,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
@@ -36,7 +34,6 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     )
     camera.position.set(0, 0, 2)
 
-    // レンダラーの設定
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight)
     renderer.setPixelRatio(window.devicePixelRatio)
@@ -45,17 +42,14 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     rendererRef.current = renderer
     mountRef.current.appendChild(renderer.domElement)
 
-    // ライトの設定
     const ambientLight = new THREE.AmbientLight(0x404040, 0.4)
     scene.add(ambientLight)
 
-    // カメラに追従する主要ライト
     const cameraLight = new THREE.DirectionalLight(0xffffff, 0.6)
-    cameraLight.position.set(0, 0, 1) // カメラの前方
+    cameraLight.position.set(0, 0, 1)
     camera.add(cameraLight)
     scene.add(camera)
 
-    // 補助的な環境ライト（複数方向から照射）
     const backLight = new THREE.DirectionalLight(0xffffff, 0.3)
     backLight.position.set(-10, -10, -5)
     scene.add(backLight)
@@ -68,9 +62,8 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     sideLight2.position.set(-10, 0, 0)
     scene.add(sideLight2)
 
-    // OrbitControlsの設定
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true // スムーズな操作
+    controls.enableDamping = true
     controls.dampingFactor = 0.05
     controls.screenSpacePanning = false
     controls.minDistance = 0.5
@@ -78,11 +71,9 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     controls.maxPolarAngle = Math.PI
     controlsRef.current = controls
 
-    // アニメーションループ
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate)
       
-      // OrbitControlsの更新
       if (controlsRef.current) {
         controlsRef.current.update()
       }
@@ -91,7 +82,6 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     }
     animate()
 
-    // ウィンドウリサイズ対応
     const handleResize = () => {
       if (!mountRef.current || !camera || !renderer) return
       
@@ -102,7 +92,6 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     
     window.addEventListener('resize', handleResize)
 
-    // クリーンアップ
     return () => {
       window.removeEventListener('resize', handleResize)
       
@@ -122,56 +111,47 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
     }
   }, [])
 
-  // モデルURLが変更された時の処理
   useEffect(() => {
     if (!modelUrl || !sceneRef.current) return
 
     setIsLoading(true)
     setLoadError(null)
 
-    // 既存のモデルを削除
     if (modelGroupRef.current) {
       sceneRef.current.remove(modelGroupRef.current)
       modelGroupRef.current = null
     }
 
-    // モデルURLの有効性をチェック
     if (!modelUrl.startsWith('http://') && !modelUrl.startsWith('https://')) {
       setLoadError('無効なモデルURLです')
       setIsLoading(false)
       return
     }
     
-    // GLTFローダーを使用してモデルを読み込む
     const loader = new GLTFLoader()
     
-    // Tripoモデルのみ表示
     if (!modelUrl.includes('tripo-data')) {
       setLoadError('Tripoモデルのみ表示可能です')
       setIsLoading(false)
       return
     }
     
-    // プロキシ経由でモデルをロード（CORS問題を回避）
     const proxyUrl = `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`
     
     loader.load(
       proxyUrl,
       (gltf) => {
-        // モデルをシーンに追加
         const modelGroup = new THREE.Group()
         modelGroup.add(gltf.scene)
         
-        // モデルのサイズを正規化
         const box = new THREE.Box3().setFromObject(gltf.scene)
         const size = box.getSize(new THREE.Vector3())
         const maxSize = Math.max(size.x, size.y, size.z)
         
-        const scale = maxSize > 0 ? 2 / maxSize : 1 // ゼロ除算を防ぐ
+        const scale = maxSize > 0 ? 2 / maxSize : 1
         
         gltf.scene.scale.multiplyScalar(scale)
         
-        // モデルを中央に配置
         const center = box.getCenter(new THREE.Vector3())
         gltf.scene.position.sub(center.multiplyScalar(scale))
         

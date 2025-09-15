@@ -57,13 +57,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 詳細情報を含めた拡張プロンプトを作成
     let enhancedPrompt = inputData
     
     if (inputType === 'TEXT') {
       const details = []
       
-      // サイズ情報
       if (width || height || depth) {
         const dimensions = []
         if (width) dimensions.push(`width ${width}cm`)
@@ -72,22 +70,18 @@ export async function POST(request: NextRequest) {
         details.push(`dimensions: ${dimensions.join(', ')}`)
       }
       
-      // 材質
       if (material) {
         details.push(`material: ${material}`)
       }
       
-      // 色
       if (color) {
         details.push(`color: ${color}`)
       }
       
-      // スタイル
       if (style) {
         details.push(`style: ${style}`)
       }
       
-      // 品質設定
       const qualityDescriptions: { [key: string]: string } = {
         low: 'simple design',
         medium: 'balanced detail',
@@ -97,18 +91,15 @@ export async function POST(request: NextRequest) {
         details.push(qualityDescriptions[quality])
       }
       
-      // テクスチャ
       if (texture) {
         details.push('with realistic textures and surface details')
       }
       
-      // プロンプトを拡張
       if (details.length > 0) {
         enhancedPrompt = `${inputData}. ${details.join(', ')}.`
       }
     }
 
-    // モデルを作成
     const model = await ModelService.create({
       userId: user.id,
       title,
@@ -117,7 +108,6 @@ export async function POST(request: NextRequest) {
       inputData: enhancedPrompt
     })
 
-    // Tripo APIを呼び出して3Dモデル生成を開始（テクスチャオプション付き）
     TripoService.startGeneration(model.id, inputType, enhancedPrompt, { texture })
 
     return NextResponse.json({
@@ -140,5 +130,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-

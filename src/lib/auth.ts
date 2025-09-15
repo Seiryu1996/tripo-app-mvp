@@ -9,7 +9,6 @@ export interface AuthUser {
   role: string
 }
 
-
 export function generateToken(user: AuthUser): string {
   return jwt.sign(
     { 
@@ -43,7 +42,6 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
     return null
   }
 
-  // データベースでユーザーの存在を確認
   const dbUser = await UserService.findById(user.id)
 
   return dbUser ? user : null

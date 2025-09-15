@@ -4,16 +4,13 @@ import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/navigation'
 import DashboardPage from '../page'
 
-// Mock heavy components
 jest.mock('@/components/ModelViewer', () => () => <div data-testid="model-viewer" />)
 jest.mock('@/components/Navigation', () => () => <nav data-testid="navigation" />)
-
-// Mock router
+ 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }))
-
-// Mock localStorage
+ 
 const mockLocalStorage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -21,7 +18,6 @@ const mockLocalStorage = {
 }
 Object.defineProperty(window, 'localStorage', { value: mockLocalStorage })
 
-// Global fetch mock
 global.fetch = jest.fn()
 
 const mockPush = jest.fn()
@@ -46,24 +42,20 @@ describe('DashboardPage', () => {
   })
 
   test('初期ロードとモデル一覧表示（フィルタ含む）', async () => {
-    // /api/auth/me
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
-    // /api/models
     const models = {
       models: [
         { id: 'm1', title: 'A', description: 'desc', inputType: 'TEXT', inputData: 'prompt', status: 'PENDING', createdAt: isoMinutesAgo(1) },
         { id: 'm2', title: 'B', description: null, inputType: 'IMAGE', inputData: 'https://example.com/i.jpg', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(3) },
-        { id: 'm3', title: 'C', description: 'old', inputType: 'TEXT', inputData: 'prompt', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(6) }, // expired -> hidden
+        { id: 'm3', title: 'C', description: 'old', inputType: 'TEXT', inputData: 'prompt', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(6) },
       ],
     }
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => models })
 
     render(<DashboardPage />)
 
-    // shows loading first
     expect(screen.getByText('読み込み中...')).toBeInTheDocument()
 
-    // after load, shows list and filters out expired completed
     await waitFor(() => {
       expect(screen.getByText('マイモデル')).toBeInTheDocument()
       expect(screen.getByText('A')).toBeInTheDocument()
@@ -71,9 +63,7 @@ describe('DashboardPage', () => {
       expect(screen.queryByText('C')).not.toBeInTheDocument()
     })
 
-    // status tags
     expect(screen.getByText('待機中')).toBeInTheDocument()
-    // completed section shows download button
     expect(screen.getByText('3Dモデルをダウンロード')).toBeInTheDocument()
   })
 
@@ -105,19 +95,16 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     await waitFor(() => screen.getByText('マイモデル'))
 
-    // open form and switch
     await user.click(screen.getByRole('button', { name: '新しいモデルを作成' }))
     await user.selectOptions(screen.getByLabelText('入力タイプ'), 'IMAGE')
     expect(screen.getByPlaceholderText('https://example.com/image.jpg')).toBeInTheDocument()
 
-    // create fail
     await user.type(screen.getByLabelText('タイトル'), 'err')
     await user.type(screen.getByPlaceholderText('https://example.com/image.jpg'), 'https://img')
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({ error: '3Dモデル生成の開始に失敗しました' }) })
     await user.click(screen.getByRole('button', { name: '生成開始' }))
     await waitFor(() => expect(screen.getByText('3Dモデル生成の開始に失敗しました')).toBeInTheDocument())
 
-    // delete fail
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) })
     await user.click(screen.getByRole('button', { name: '削除' }))
@@ -127,37 +114,29 @@ describe('DashboardPage', () => {
 
   test('新規作成フォームの表示・送信（送信中はボタン無効）', async () => {
     const user = userEvent.setup()
-    // /api/auth/me
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
-    // 初回 /api/models（空）
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
 
     render(<DashboardPage />)
     await waitFor(() => screen.getByText('マイモデル'))
 
-    // Open form
     await user.click(screen.getByRole('button', { name: '新しいモデルを作成' }))
     expect(screen.getByText('新しい3Dモデルを作成')).toBeInTheDocument()
 
-    // Fill fields (TEXT default)
     await user.type(screen.getByPlaceholderText('例: かっこいい車'), 'sample')
     await user.type(screen.getByPlaceholderText('例: 青いスポーツカー、光沢のある表面、リアルなディテール'), 'prompt here')
 
-    // Mock POST /api/models with delayed promise and then success
     let resolvePost: (v: any) => void
     const postPromise = new Promise((resolve) => (resolvePost = resolve))
-    ;(fetch as jest.Mock).mockReturnValueOnce(postPromise) // POST
-    // subsequent refresh GET
+    ;(fetch as jest.Mock).mockReturnValueOnce(postPromise)
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
 
     const submitBtn = screen.getByRole('button', { name: '生成開始' })
     await user.click(submitBtn)
 
-    // While pending
     expect(screen.getByText('開始中...')).toBeInTheDocument()
     expect(submitBtn).toBeDisabled()
 
-    // Resolve POST
     resolvePost!({ ok: true, json: async () => ({ message: 'ok', model: { id: 'x' } }) })
 
     await waitFor(() => {
@@ -167,11 +146,8 @@ describe('DashboardPage', () => {
 
   test('モデルの削除でAPI呼び出しと一覧更新', async () => {
     const user = userEvent.setup()
-    // Confirm dialog
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
-    // /api/auth/me
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
-    // 初回 /api/models
     ;(fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ models: [{ id: 'mid', title: 'deleteme', description: '', inputType: 'TEXT', inputData: 'x', status: 'PENDING', createdAt: isoMinutesAgo(1) }] }),
@@ -180,15 +156,12 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     await waitFor(() => screen.getByText('deleteme'))
 
-    // DELETE response
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-    // refresh GET
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
 
     await user.click(screen.getByRole('button', { name: '削除' }))
 
     await waitFor(() => {
-      // DELETE called
       expect((fetch as jest.Mock).mock.calls.some(([url, opts]) => String(url).startsWith('/api/models/') && (opts as any)?.method === 'DELETE')).toBe(true)
     })
 
@@ -197,7 +170,6 @@ describe('DashboardPage', () => {
 
   test('完了モデルのダウンロード成功と失敗', async () => {
     const user = userEvent.setup()
-    // Mock URL methods and anchor
     const createObjectURLMock = jest.fn().mockReturnValue('blob:mock')
     const revokeObjectURLMock = jest.fn()
     const originalCreate = window.URL.createObjectURL as any
@@ -216,9 +188,7 @@ describe('DashboardPage', () => {
         return originalCreateElement(tagName as any, options)
       }) as any)
 
-    // /api/auth/me
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
-    // 初回 /api/models -> one completed
     ;(fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ models: [{ id: 'mid', title: 'done', description: '', inputType: 'TEXT', inputData: 'x', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(1) }] }),
@@ -227,7 +197,6 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     await waitFor(() => screen.getByText('3Dモデルをダウンロード'))
 
-    // First click success
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['x'], { type: 'model/gltf-binary' }) })
     await user.click(screen.getByRole('button', { name: '3Dモデルをダウンロード' }))
 
@@ -239,14 +208,12 @@ describe('DashboardPage', () => {
       expect(removeSpy).toHaveBeenCalled()
     })
 
-    // Second click failure
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, text: async () => 'err' })
     await user.click(screen.getByRole('button', { name: '3Dモデルをダウンロード' }))
     await waitFor(() => {
       expect(screen.getByText('ダウンロードに失敗しました')).toBeInTheDocument()
     })
 
-    // restore spies/mocks to avoid leakage
     clickSpy.mockRestore()
     createElSpy.mockRestore()
     appendSpy.mockRestore()
@@ -256,9 +223,7 @@ describe('DashboardPage', () => {
   })
 
   test('モデル取得エラー時のエラーメッセージ', async () => {
-    // /api/auth/me ok
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
-    // /api/models fails
     ;(fetch as jest.Mock).mockRejectedValueOnce(new Error('network'))
 
     render(<DashboardPage />)

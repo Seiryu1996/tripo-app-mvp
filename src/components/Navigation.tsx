@@ -53,7 +53,6 @@ export default function Navigation({ currentPath }: NavigationProps) {
     router.push('/')
   }
 
-
   if (loading) {
     return (
       <div className="bg-white shadow mb-6">
@@ -68,7 +67,6 @@ export default function Navigation({ currentPath }: NavigationProps) {
   }
 
   if (!user) {
-    // ユーザー情報がない場合でも、ログアウトボタンは表示する
     return (
       <div className="bg-white shadow mb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

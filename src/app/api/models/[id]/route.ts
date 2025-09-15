@@ -10,7 +10,6 @@ export async function DELETE(
     const user = await requireAuth(request)
     const modelId = params.id
 
-    // モデルが存在し、ユーザーが所有者かチェック
     const model = await ModelService.findById(modelId)
     if (!model) {
       return NextResponse.json(
@@ -26,7 +25,6 @@ export async function DELETE(
       )
     }
 
-    // モデルを削除
     await ModelService.delete(modelId)
 
     return NextResponse.json({

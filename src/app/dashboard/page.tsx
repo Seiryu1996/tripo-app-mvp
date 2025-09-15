@@ -16,21 +16,15 @@ interface Model {
   previewUrl?: string
   createdAt: string
 }
-
-// モデルの有効期限をチェックする関数（5分）
 const isModelExpired = (createdAt: string): boolean => {
   const created = new Date(createdAt)
   const now = new Date()
   const minutesDiff = (now.getTime() - created.getTime()) / (1000 * 60)
   return minutesDiff > 5
 }
-
-// 有効なモデルのみをフィルタする関数
 const filterValidModels = (models: Model[]): Model[] => {
   return models.filter(model => {
-    // 未完了のモデル（PENDING、PROCESSING、FAILED、BANNED）は表示
     if (model.status !== 'COMPLETED') return true
-    // 完了済みモデルは有効期限をチェック
     return !isModelExpired(model.createdAt)
   })
 }
@@ -48,7 +42,6 @@ export default function DashboardPage() {
     description: '',
     inputType: 'TEXT' as 'TEXT' | 'IMAGE',
     inputData: '',
-    // 詳細設定
     width: '',
     height: '',
     depth: '',
@@ -65,7 +58,6 @@ export default function DashboardPage() {
     fetchModels()
   }, [])
 
-  // 生成中のモデルがある場合のみポーリング（BANNED、COMPLETED、FAILEDは除外）
   useEffect(() => {
     const hasProcessingModels = models.some(model => 
       model.status === 'PENDING' || model.status === 'PROCESSING'
@@ -75,7 +67,7 @@ export default function DashboardPage() {
 
     const interval = setInterval(() => {
       fetchModels()
-    }, 3000) // 3秒ごとに更新
+    }, 3000)
 
     return () => clearInterval(interval)
   }, [models])
@@ -116,7 +108,6 @@ export default function DashboardPage() {
       
       if (response.ok) {
         const data = await response.json()
-        // 有効なモデルのみを表示
         const validModels = filterValidModels(data.models || [])
         setModels(validModels)
         setError('')
@@ -181,7 +172,6 @@ export default function DashboardPage() {
     }
   }
 
-
   const handleDelete = async (modelId: string) => {
     if (!confirm('このモデルを削除しますか？')) return
 
@@ -195,7 +185,7 @@ export default function DashboardPage() {
       })
 
       if (response.ok) {
-        fetchModels() // 一覧を更新
+        fetchModels()
       } else {
         const data = await response.json()
         setError(data.error || 'モデルの削除に失敗しました')
@@ -305,7 +295,6 @@ export default function DashboardPage() {
             <div className="bg-white shadow rounded-lg p-6 mb-6">
               <h3 className="text-lg font-medium mb-4">新しい3Dモデルを作成</h3>
               
-              {/* 有効期限の注意書き */}
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                 <div className="flex items-center">
                   <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -383,11 +372,9 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* 詳細設定セクション */}
                 <div className="border-t pt-4">
                   <h4 className="text-md font-medium text-gray-800 mb-3">詳細設定（任意）</h4>
                   
-                  {/* サイズ設定 */}
                   <div className="grid grid-cols-3 gap-3 mb-4">
                     <div>
                       <label htmlFor="dash-width" className="block text-sm font-medium text-gray-700">幅（cm）</label>
@@ -430,7 +417,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* 材質と色 */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
                       <label htmlFor="dash-material" className="block text-sm font-medium text-gray-700">材質</label>
@@ -456,7 +442,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* スタイルと品質 */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
                       <label htmlFor="dash-style" className="block text-sm font-medium text-gray-700">スタイル</label>
@@ -484,7 +469,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* テクスチャ設定 */}
                   <div className="flex items-center">
                     <input
                       id="texture"
@@ -543,7 +527,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* 有効期限の注意書き（一覧画面用） */}
           {models.length > 0 && (
             <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center">
@@ -606,7 +589,6 @@ export default function DashboardPage() {
                     />
                   )}
                   
-                  {/* 3Dモデルプレビュー */}
                   {model.status === 'COMPLETED' && model.modelUrl && (
                     <div className="mt-4">
                       <ModelViewer modelUrl={model.modelUrl} className="mb-3" />
@@ -627,7 +609,6 @@ export default function DashboardPage() {
                     </div>
                   )}
                   
-                  {/* 処理中の場合の表示 */}
                   {model.status === 'PROCESSING' && (
                     <div className="mt-4">
                       <div className="flex items-center">
@@ -637,7 +618,6 @@ export default function DashboardPage() {
                     </div>
                   )}
                   
-                  {/* 待機中の場合の表示 */}
                   {model.status === 'PENDING' && (
                     <div className="mt-4">
                       <div className="flex items-center">
@@ -647,7 +627,6 @@ export default function DashboardPage() {
                     </div>
                   )}
                   
-                  {/* 失敗の場合の表示 */}
                   {model.status === 'FAILED' && (
                     <div className="mt-4">
                       <div className="flex items-center">
@@ -657,7 +636,6 @@ export default function DashboardPage() {
                     </div>
                   )}
                   
-                  {/* 禁止コンテンツの場合の表示 */}
                   {model.status === 'BANNED' && (
                     <div className="mt-4">
                       <div className="flex items-center mb-2">

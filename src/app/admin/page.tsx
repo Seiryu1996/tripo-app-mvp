@@ -18,6 +18,7 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [error, setError] = useState('')
+  const [currentUserId, setCurrentUserId] = useState<string>('')
   const router = useRouter()
 
   const [formData, setFormData] = useState({
@@ -46,9 +47,17 @@ export default function AdminPage() {
         }
       })
 
-      if (!response.ok || (await response.json()).role !== 'ADMIN') {
+      if (!response.ok) {
         router.push('/login')
+        return
       }
+
+      const me = await response.json()
+      if (me.role !== 'ADMIN') {
+        router.push('/login')
+        return
+      }
+      setCurrentUserId(me.id)
     } catch {
       router.push('/login')
     }
@@ -110,6 +119,10 @@ export default function AdminPage() {
   }
 
   const handleDelete = async (userId: string) => {
+    if (userId === currentUserId) {
+      setError('自分のアカウントは削除できません')
+      return
+    }
     if (!confirm('本当に削除しますか？')) return
 
     try {
@@ -124,7 +137,12 @@ export default function AdminPage() {
       if (response.ok) {
         fetchUsers()
       } else {
-        setError('削除に失敗しました')
+        try {
+          const data = await response.json()
+          setError(data?.error || '削除に失敗しました')
+        } catch {
+          setError('削除に失敗しました')
+        }
       }
     } catch {
       setError('削除に失敗しました')
@@ -141,7 +159,6 @@ export default function AdminPage() {
     })
     setShowCreateForm(true)
   }
-
 
   if (loading) {
     return (
@@ -300,7 +317,8 @@ export default function AdminPage() {
                       </button>
                       <button
                         onClick={() => handleDelete(user.id)}
-                        className="text-red-600 hover:text-red-900"
+                        className={`${user.id === currentUserId ? 'text-gray-400' : 'text-red-600 hover:text-red-900'}`}
+                        title={user.id === currentUserId ? '自分のアカウントは削除できません' : ''}
                       >
                         削除
                       </button>

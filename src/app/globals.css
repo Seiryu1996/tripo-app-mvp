@@ -2,26 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* グローバルなスタイル設定 */
 body {
-  color: #1f2937; /* text-gray-800 */
-  background-color: #f9fafb; /* bg-gray-50 */
+  color: #1f2937;
+  background-color: #f9fafb;
 }
 
-/* 入力フィールドの統一スタイル */
 input, textarea, select {
-  color: #1f2937 !important; /* text-gray-800 */
-  background-color: #ffffff !important; /* bg-white */
+  color: #1f2937 !important;
+  background-color: #ffffff !important;
 }
 
-/* プレースホルダーの色 */
 input::placeholder, textarea::placeholder {
-  color: #6b7280 !important; /* text-gray-500 */
+  color: #6b7280 !important;
 }
 
-/* フォーカス時のスタイル */
 input:focus, textarea:focus, select:focus {
   outline: none;
-  border-color: #3b82f6; /* border-blue-500 */
+  border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }

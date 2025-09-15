@@ -47,8 +47,6 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[Proxy] Error:', error.message)
     console.error('[Proxy] URL:', decodedUrl)
-    
-    // 403エラーの場合は詳細なエラーメッセージを返す
     if (error.message.includes('403')) {
       return NextResponse.json(
         { error: 'モデルURLの有効期限が切れているか、アクセス権限がありません。モデルを再生成してください。' },
