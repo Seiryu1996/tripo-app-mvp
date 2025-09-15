@@ -27,12 +27,10 @@ export default function Home() {
           const user = await response.json()
           router.push(user.role === 'ADMIN' ? '/admin' : '/dashboard')
         } else {
-          // 無効なトークンを削除
           localStorage.removeItem('token')
           setLoading(false)
         }
       } catch (error) {
-        // エラーの場合はトークンを削除
         localStorage.removeItem('token')
         setLoading(false)
       }

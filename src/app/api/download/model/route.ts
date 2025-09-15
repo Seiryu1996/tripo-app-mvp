@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-
-// APIルートを動的として明示的に指定
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
@@ -19,7 +17,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Filename is required' }, { status: 400 })
     }
 
-    // 外部URLからファイルを取得
     const response = await fetch(decodeURIComponent(modelUrl), {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -34,7 +31,6 @@ export async function GET(request: NextRequest) {
     const blob = await response.arrayBuffer()
     const decodedFilename = decodeURIComponent(filename)
     
-    // 日本語ファイル名をUTF-8でエンコード (RFC 5987)
     const encodedFilename = encodeURIComponent(decodedFilename)
     
     return new NextResponse(blob, {

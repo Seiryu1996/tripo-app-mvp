@@ -11,7 +11,6 @@ export default function LoginPage() {
   const router = useRouter()
 
   useEffect(() => {
-    // 既にログインしている場合はリダイレクト
     const checkAuth = async () => {
       const token = localStorage.getItem('token')
       if (!token) return
@@ -28,7 +27,6 @@ export default function LoginPage() {
           router.push(user.role === 'ADMIN' ? '/admin' : '/dashboard')
         }
       } catch (error) {
-        // エラーの場合はトークンを削除
         localStorage.removeItem('token')
       }
     }
