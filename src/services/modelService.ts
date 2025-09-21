@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
-import { Model, ModelStatus as PrismaModelStatus } from '@prisma/client'
+import { Model, Prisma } from '@prisma/client'
 
-export type ModelStatus = PrismaModelStatus
+export type ModelStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'BANNED'
 export type InputType = 'TEXT' | 'IMAGE'
 
 export interface CreateModelData {
@@ -46,7 +46,10 @@ export class ModelService {
   static async update(id: string, data: UpdateModelData): Promise<Model> {
     return prisma.model.update({
       where: { id },
-      data
+      data: {
+        ...data,
+        status: data.status ? (data.status as Prisma.ModelStatus) : undefined,
+      }
     })
   }
 
@@ -59,7 +62,7 @@ export class ModelService {
   static async updateStatus(id: string, status: ModelStatus): Promise<Model> {
     return prisma.model.update({
       where: { id },
-      data: { status }
+      data: { status: status as Prisma.ModelStatus }
     })
   }
 
@@ -67,7 +70,7 @@ export class ModelService {
     return prisma.model.update({
       where: { id },
       data: {
-        status: 'COMPLETED',
+        status: 'COMPLETED' as Prisma.ModelStatus,
         modelUrl,
         previewUrl
       }
@@ -79,7 +82,7 @@ export class ModelService {
       where: { id },
       data: { 
         tripoTaskId: taskId,
-        status: 'PROCESSING'
+        status: 'PROCESSING' as Prisma.ModelStatus
       }
     })
   }

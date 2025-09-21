@@ -197,10 +197,16 @@ export class StorageService {
     const [metadata] = await file.getMetadata()
     const [buffer] = await file.download()
 
+    const size = typeof metadata.size === 'number'
+      ? metadata.size
+      : metadata.size
+        ? Number(metadata.size)
+        : undefined
+
     return {
       buffer,
       contentType: metadata.contentType || 'application/octet-stream',
-      contentLength: metadata.size ? parseInt(metadata.size, 10) : buffer.length,
+      contentLength: size ?? buffer.length,
       updated: metadata.updated,
       objectPath: object,
     }
