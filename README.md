@@ -44,6 +44,27 @@ cp .env.example .env
 - `ADMIN_PASSWORD`: 初期管理者のパスワード
 - `TRIPO_API_KEY`: Tripo APIキー
 - `TRIPO_API_URL`: Tripo APIのエンドポイント
+- `GCS_BUCKET_NAME`: モデルを保存するGCSバケット名
+- `GCP_PROJECT_ID`: 利用するGCPプロジェクトID
+- `GCP_CLIENT_EMAIL`: サービスアカウントのメールアドレス
+- `GCP_PRIVATE_KEY`: サービスアカウントの秘密鍵（改行は `\n` に置換して設定）
+
+#### ローカルで ADC を利用しない場合の GCS 認証手順
+
+1. GCS へ書き込めるロール（例: `roles/storage.objectAdmin`）を持つサービスアカウントの JSON キーを作成します。
+   ```bash
+   gcloud iam service-accounts keys create key.json \
+     --iam-account=<SERVICE_ACCOUNT>@<PROJECT_ID>.iam.gserviceaccount.com \
+     --project=<PROJECT_ID>
+   ```
+2. JSON に含まれる `client_email`, `private_key` を `.env` に転記します。`private_key` の改行は `\n` に置換してください。
+   ```env
+   GCS_BUCKET_NAME=your-model-bucket
+   GCP_PROJECT_ID=your-project-id
+   GCP_CLIENT_EMAIL=service-account@example.iam.gserviceaccount.com
+   GCP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
+   ```
+3. これらの環境変数を設定した状態で Docker 経由の `npm run dev` などを実行すると、ローカルでも同じ資格情報を使って GCS へアップロードできます。
 
 ### 2. Docker環境での起動
 
@@ -98,6 +119,12 @@ docker compose exec app npm run db:studio
 3. テキストまたは画像を入力して3Dモデル生成
 4. 生成完了後、3Dモデルをダウンロード
 
+> 生成されたモデルデータは GCS に非公開で保存されます。表示・ダウンロードはいずれも `/api/models/[id]/file` を経由し、認証済みユーザーだけがアクセスできます。
+
+## デプロイ
+
+本番環境へのデプロイは GitHub Actions から Workload Identity Federation (WIF) を使って Cloud Run へ行います。GCP 側の準備手順と GitHub Secrets の設定方法は `docs/deployment-gcp.md` を参照してください。
+
 ## API エンドポイント
 
 ### 認証
@@ -113,6 +140,7 @@ docker compose exec app npm run db:studio
 ### 3Dモデル
 - `GET /api/models` - ユーザーのモデル一覧取得
 - `POST /api/models` - 新しいモデル生成開始
+- `GET /api/models/[id]/file` - モデルまたはプレビューの取得（サインイン必須）
 
 ## データベーススキーマ
 
