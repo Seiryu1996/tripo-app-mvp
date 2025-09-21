@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - develop
+      - fix/**
+      - task/**
   # schedule:
   #   - cron: '0 12 * * *'
 
