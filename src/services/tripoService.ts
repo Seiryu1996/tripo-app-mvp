@@ -1,4 +1,5 @@
 import { ModelService } from './modelService'
+import { StorageService } from './storageService'
 
 export interface TripoTaskResult {
   pbr_model?: { url: string }
@@ -87,10 +88,44 @@ export class TripoService {
                            taskData.result.preview_image || 
                            taskData.result.preview_url || 
                            taskData.result.generated_image
-          
-          if (modelUrl) {
-            await ModelService.completeModel(modelId, modelUrl, previewUrl)
-          } else {
+
+          if (!modelUrl) {
+            await ModelService.updateStatus(modelId, 'FAILED')
+            return
+          }
+
+          const modelRecord = await ModelService.findById(modelId)
+
+          if (!modelRecord) {
+            console.error(`[Tripo] Model not found during completion: ${modelId}`)
+            return
+          }
+
+          try {
+            let persistedModelUrl = modelUrl
+            let persistedPreviewUrl = previewUrl
+
+            if (StorageService.isConfigured()) {
+              persistedModelUrl = await StorageService.uploadModelAsset({
+                source: modelUrl,
+                userId: modelRecord.userId,
+                modelId: modelRecord.id,
+                filename: 'model',
+              })
+
+              if (previewUrl) {
+                persistedPreviewUrl = await StorageService.uploadModelAsset({
+                  source: previewUrl,
+                  userId: modelRecord.userId,
+                  modelId: modelRecord.id,
+                  filename: 'preview',
+                })
+              }
+            }
+
+            await ModelService.completeModel(modelId, persistedModelUrl, persistedPreviewUrl)
+          } catch (error) {
+            console.error('[Tripo] Storage upload failed:', error)
             await ModelService.updateStatus(modelId, 'FAILED')
           }
           

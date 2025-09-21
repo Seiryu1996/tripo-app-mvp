@@ -26,11 +26,18 @@ const mockRouter = { push: mockPush }
 const isoMinutesAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString()
 
 describe('DashboardPage', () => {
+  let consoleErrorSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     mockLocalStorage.getItem.mockReturnValue('token')
     ;(fetch as jest.Mock).mockReset()
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy?.mockRestore()
   })
 
   test('認証トークンがない場合はログインにリダイレクト', async () => {
@@ -41,13 +48,13 @@ describe('DashboardPage', () => {
     })
   })
 
-  test('初期ロードとモデル一覧表示（フィルタ含む）', async () => {
+  test('初期ロードでモデル一覧をそのまま表示', async () => {
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
     const models = {
       models: [
         { id: 'm1', title: 'A', description: 'desc', inputType: 'TEXT', inputData: 'prompt', status: 'PENDING', createdAt: isoMinutesAgo(1) },
-        { id: 'm2', title: 'B', description: null, inputType: 'IMAGE', inputData: 'https://example.com/i.jpg', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(3) },
-        { id: 'm3', title: 'C', description: 'old', inputType: 'TEXT', inputData: 'prompt', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(6) },
+        { id: 'm2', title: 'B', description: null, inputType: 'IMAGE', inputData: 'https://example.com/i.jpg', status: 'COMPLETED', modelUrl: 'gs://bucket/models/m2/model.glb', createdAt: isoMinutesAgo(3) },
+        { id: 'm3', title: 'C', description: 'old', inputType: 'TEXT', inputData: 'prompt', status: 'COMPLETED', modelUrl: 'gs://bucket/models/m3/model.glb', createdAt: isoMinutesAgo(6) },
       ],
     }
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => models })
@@ -60,11 +67,11 @@ describe('DashboardPage', () => {
       expect(screen.getByText('マイモデル')).toBeInTheDocument()
       expect(screen.getByText('A')).toBeInTheDocument()
       expect(screen.getByText('B')).toBeInTheDocument()
-      expect(screen.queryByText('C')).not.toBeInTheDocument()
+      expect(screen.getByText('C')).toBeInTheDocument()
     })
 
     expect(screen.getByText('待機中')).toBeInTheDocument()
-    expect(screen.getByText('3Dモデルをダウンロード')).toBeInTheDocument()
+    expect(screen.getAllByText('3Dモデルをダウンロード').length).toBe(2)
   })
 
   test('各ステータスの表示（PROCESSING/FAILED/BANNED）', async () => {
@@ -191,13 +198,13 @@ describe('DashboardPage', () => {
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
     ;(fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ models: [{ id: 'mid', title: 'done', description: '', inputType: 'TEXT', inputData: 'x', status: 'COMPLETED', modelUrl: 'https://x/tripo-data/model.glb', createdAt: isoMinutesAgo(1) }] }),
+      json: async () => ({ models: [{ id: 'mid', title: 'done', description: '', inputType: 'TEXT', inputData: 'x', status: 'COMPLETED', modelUrl: 'gs://bucket/models/mid/model.glb', createdAt: isoMinutesAgo(1) }] }),
     })
 
     render(<DashboardPage />)
     await waitFor(() => screen.getByText('3Dモデルをダウンロード'))
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, blob: async () => new Blob(['x'], { type: 'model/gltf-binary' }) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200, blob: async () => new Blob(['x'], { type: 'model/gltf-binary' }) })
     await user.click(screen.getByRole('button', { name: '3Dモデルをダウンロード' }))
 
     await waitFor(() => {
@@ -208,7 +215,10 @@ describe('DashboardPage', () => {
       expect(removeSpy).toHaveBeenCalled()
     })
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, text: async () => 'err' })
+    const downloadCall = (fetch as jest.Mock).mock.calls.find(([url]) => String(url).includes('/api/models/mid/file'))
+    expect(downloadCall).toBeDefined()
+
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'err' })
     await user.click(screen.getByRole('button', { name: '3Dモデルをダウンロード' }))
     await waitFor(() => {
       expect(screen.getByText('ダウンロードに失敗しました')).toBeInTheDocument()

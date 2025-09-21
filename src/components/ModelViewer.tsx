@@ -122,24 +122,26 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
       modelGroupRef.current = null
     }
 
-    if (!modelUrl.startsWith('http://') && !modelUrl.startsWith('https://')) {
-      setLoadError('無効なモデルURLです')
+    if (!modelUrl.startsWith('/')) {
+      setLoadError('内部APIのURLのみサポートしています')
       setIsLoading(false)
       return
     }
-    
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    if (!token) {
+      setLoadError('認証が必要です')
+      setIsLoading(false)
+      return
+    }
+
     const loader = new GLTFLoader()
-    
-    if (!modelUrl.includes('tripo-data')) {
-      setLoadError('Tripoモデルのみ表示可能です')
-      setIsLoading(false)
-      return
+    if (token) {
+      loader.setRequestHeader({ Authorization: `Bearer ${token}` })
     }
-    
-    const proxyUrl = `/api/proxy/model?url=${encodeURIComponent(modelUrl)}`
-    
+    loader.setCrossOrigin('anonymous')
     loader.load(
-      proxyUrl,
+      modelUrl,
       (gltf) => {
         const modelGroup = new THREE.Group()
         modelGroup.add(gltf.scene)
@@ -170,11 +172,13 @@ export default function ModelViewer({ modelUrl, className = '' }: ModelViewerPro
             errorMessage = 'モデルファイルが見つかりません'
           } else if (error.message.includes('network')) {
             errorMessage = 'ネットワークエラーが発生しました'
+          } else if (error.message.includes('403')) {
+            errorMessage = 'アクセス権限がありません'
           } else {
             errorMessage = `読み込みエラー: ${error.message}`
           }
         }
-        
+
         setLoadError(errorMessage)
         setIsLoading(false)
       }

@@ -44,9 +44,15 @@ export class ModelService {
   }
 
   static async update(id: string, data: UpdateModelData): Promise<Model> {
+    const { status, ...rest } = data
+    const updateData: any = { ...rest }
+    if (status) {
+      updateData.status = status
+    }
+
     return prisma.model.update({
       where: { id },
-      data
+      data: updateData,
     })
   }
 
@@ -59,7 +65,7 @@ export class ModelService {
   static async updateStatus(id: string, status: ModelStatus): Promise<Model> {
     return prisma.model.update({
       where: { id },
-      data: { status }
+      data: { status: status as any }
     })
   }
 
@@ -67,7 +73,7 @@ export class ModelService {
     return prisma.model.update({
       where: { id },
       data: {
-        status: 'COMPLETED',
+        status: 'COMPLETED' as any,
         modelUrl,
         previewUrl
       }
@@ -79,7 +85,7 @@ export class ModelService {
       where: { id },
       data: { 
         tripoTaskId: taskId,
-        status: 'PROCESSING'
+        status: 'PROCESSING' as any
       }
     })
   }
