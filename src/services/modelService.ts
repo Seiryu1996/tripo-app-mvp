@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { Model, Prisma } from '@prisma/client'
+import { Model } from '@prisma/client'
 
 export type ModelStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'BANNED'
 export type InputType = 'TEXT' | 'IMAGE'
@@ -44,11 +44,12 @@ export class ModelService {
   }
 
   static async update(id: string, data: UpdateModelData): Promise<Model> {
+    const { status, ...rest } = data
     return prisma.model.update({
       where: { id },
       data: {
-        ...data,
-        status: data.status ? (data.status as Prisma.ModelStatus) : undefined,
+        ...rest,
+        ...(status ? { status: { set: status } } : {})
       }
     })
   }
@@ -62,7 +63,7 @@ export class ModelService {
   static async updateStatus(id: string, status: ModelStatus): Promise<Model> {
     return prisma.model.update({
       where: { id },
-      data: { status: status as Prisma.ModelStatus }
+      data: { status: { set: status } }
     })
   }
 
@@ -70,7 +71,7 @@ export class ModelService {
     return prisma.model.update({
       where: { id },
       data: {
-        status: 'COMPLETED' as Prisma.ModelStatus,
+        status: { set: 'COMPLETED' },
         modelUrl,
         previewUrl
       }
@@ -82,7 +83,7 @@ export class ModelService {
       where: { id },
       data: { 
         tripoTaskId: taskId,
-        status: 'PROCESSING' as Prisma.ModelStatus
+        status: { set: 'PROCESSING' }
       }
     })
   }
