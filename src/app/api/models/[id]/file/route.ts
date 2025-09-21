@@ -40,7 +40,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       headers.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
     }
 
-    return new NextResponse(buffer, {
+    const chunk = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(chunk)
+        controller.close()
+      }
+    })
+
+    return new NextResponse(stream, {
       status: 200,
       headers,
     })

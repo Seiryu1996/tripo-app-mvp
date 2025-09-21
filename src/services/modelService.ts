@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
-import { Model } from '@prisma/client'
+import { Model, ModelStatus as PrismaModelStatus } from '@prisma/client'
 
-export type ModelStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'BANNED'
+export type ModelStatus = PrismaModelStatus
 export type InputType = 'TEXT' | 'IMAGE'
 
 export interface CreateModelData {
