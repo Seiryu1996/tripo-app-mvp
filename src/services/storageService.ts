@@ -12,12 +12,42 @@ interface UploadFromSourceParams {
   filename: string
 }
 
+interface UploadInputImageParams {
+  dataUri: string
+  userId: string
+  modelId: string
+  filename?: string
+  expiresInSeconds?: number
+}
+
 const bucketName = process.env.GCS_BUCKET_NAME
 const projectId = process.env.GCP_PROJECT_ID
 const clientEmail = process.env.GCP_CLIENT_EMAIL
 const privateKey = process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, '\n')
 
 let storage: Storage | null = null
+
+function sanitizeFilename(filename: string, fallback: string, extension: string) {
+  const name = filename.trim() || fallback
+  const safe = name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  if (safe.includes('.')) {
+    return safe
+  }
+  return extension ? `${safe}${extension}` : safe
+}
+
+function parseDataUri(dataUri: string) {
+  const match = dataUri.match(/^data:(.*?);base64,(.*)$/)
+  if (!match) {
+    throw new Error('Invalid data URI format')
+  }
+
+  const contentType = match[1]
+  const data = match[2]
+  const buffer = Buffer.from(data, 'base64')
+
+  return { contentType, buffer }
+}
 
 function getStorage() {
   if (storage) return storage
@@ -88,21 +118,19 @@ function guessExtensionFromUrl(url: string) {
   }
 }
 
-function buildDestination({ userId, modelId, filename }: UploadFromSourceParams, fallbackExtension = '') {
+function buildDestination(
+  { userId, modelId, filename }: UploadFromSourceParams,
+  fallbackExtension = '',
+  options?: { subdir?: string }
+) {
   const extension = filename.includes('.') ? '' : fallbackExtension
-  return `users/${userId}/models/${modelId}/${filename}${extension}`
+  const subdir = options?.subdir ? `${options.subdir.replace(/^[\/]+|[\/]+$/g, '')}/` : ''
+  return `users/${userId}/models/${modelId}/${subdir}${filename}${extension}`
 }
 
 async function uploadBase64DataUri(params: UploadFromSourceParams) {
   const { source } = params
-  const match = source.match(/^data:(.*?);base64,(.*)$/)
-  if (!match) {
-    throw new Error('Invalid data URI format')
-  }
-
-  const contentType = match[1]
-  const data = match[2]
-  const buffer = Buffer.from(data, 'base64')
+  const { contentType, buffer } = parseDataUri(source)
   const extension = guessExtensionFromContentType(contentType)
   const destination = buildDestination(params, extension)
 
@@ -141,6 +169,54 @@ export class StorageService {
     }
 
     return uploadFromRemoteUrl(params)
+  }
+
+  static async uploadInputImage(params: UploadInputImageParams) {
+    if (!this.isConfigured()) {
+      throw new Error('Storage is not configured')
+    }
+
+    const { contentType, buffer } = parseDataUri(params.dataUri)
+    const extension = guessExtensionFromContentType(contentType)
+    const filename = sanitizeFilename(params.filename || 'input', 'input', extension)
+
+    const destination = buildDestination(
+      {
+        source: params.dataUri,
+        userId: params.userId,
+        modelId: params.modelId,
+        filename
+      },
+      extension,
+      { subdir: 'input' }
+    )
+
+    const bucket = requireBucket()
+    const file = bucket.file(destination)
+
+    const uploadOptions: UploadOptions = {
+      resumable: false,
+      metadata: {
+        cacheControl: 'private, max-age=0, no-cache',
+        contentType,
+      },
+    }
+
+    await file.save(buffer, uploadOptions)
+
+    const expiresInSeconds = params.expiresInSeconds ?? 86400
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000)
+    const [signedUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: expiresAt,
+    })
+
+    return {
+      storageUri: `gs://${bucket.name}/${destination}`,
+      signedUrl,
+      contentType,
+    }
   }
 
   private static parseResourcePath(resource: string): ParsedObjectPath {

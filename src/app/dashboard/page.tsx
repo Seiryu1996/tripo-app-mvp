@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { ChangeEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ModelViewer from '@/components/ModelViewer'
 import Navigation from '@/components/Navigation'
@@ -16,6 +16,43 @@ interface Model {
   previewUrl?: string
   createdAt: string
 }
+
+type ImageInputMode = 'URL' | 'UPLOAD'
+
+interface FormDataState {
+  title: string
+  description: string
+  inputType: 'TEXT' | 'IMAGE'
+  inputData: string
+  width: string
+  height: string
+  depth: string
+  material: string
+  color: string
+  style: string
+  quality: 'low' | 'medium' | 'high'
+  texture: boolean
+  imageMode: ImageInputMode
+  imageFilename: string
+}
+
+const createInitialFormData = (): FormDataState => ({
+  title: '',
+  description: '',
+  inputType: 'TEXT',
+  inputData: '',
+  width: '',
+  height: '',
+  depth: '',
+  material: '',
+  color: '',
+  style: '',
+  quality: 'medium',
+  texture: false,
+  imageMode: 'UPLOAD',
+  imageFilename: ''
+})
+
 export default function DashboardPage() {
   const [models, setModels] = useState<Model[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,20 +61,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    inputType: 'TEXT' as 'TEXT' | 'IMAGE',
-    inputData: '',
-    width: '',
-    height: '',
-    depth: '',
-    material: '',
-    color: '',
-    style: '',
-    quality: 'medium' as 'low' | 'medium' | 'high',
-    texture: false
-  })
+  const [formData, setFormData] = useState<FormDataState>(createInitialFormData())
   const [downloading, setDownloading] = useState<string | null>(null)
 
   useEffect(() => {
@@ -113,9 +137,36 @@ export default function DashboardPage() {
     setError('')
     if (submitting) return
 
-    if (!formData.title || !formData.inputData) {
-      setError('タイトルと入力データは必須です')
+    if (!formData.title.trim()) {
+      setError('タイトルは必須です')
       return
+    }
+
+    if (formData.inputType === 'TEXT') {
+      if (!formData.inputData.trim()) {
+        setError('テキストプロンプトを入力してください')
+        return
+      }
+    } else if (formData.imageMode === 'URL') {
+      if (!formData.inputData.trim()) {
+        setError('画像URLを入力してください')
+        return
+      }
+    } else if (!formData.imageFilename || !formData.inputData) {
+      setError('画像ファイルを選択してください')
+      return
+    }
+
+    if (formData.inputType === 'IMAGE' && formData.imageMode === 'URL') {
+      try {
+        const url = new URL(formData.inputData)
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          throw new Error('Invalid protocol')
+        }
+      } catch (err) {
+        setError('有効な画像URLを入力してください')
+        return
+      }
     }
 
     try {
@@ -133,20 +184,7 @@ export default function DashboardPage() {
       if (response.ok) {
         fetchModels()
         setShowCreateForm(false)
-        setFormData({ 
-          title: '', 
-          description: '', 
-          inputType: 'TEXT', 
-          inputData: '',
-          width: '',
-          height: '',
-          depth: '',
-          material: '',
-          color: '',
-          style: '',
-          quality: 'medium',
-          texture: false
-        })
+        setFormData(createInitialFormData())
       } else {
         const data = await response.json()
         setError(data.error || '3Dモデル生成の開始に失敗しました')
@@ -156,6 +194,81 @@ export default function DashboardPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleImageModeChange = (mode: ImageInputMode) => {
+    setError('')
+    setFormData(prev => ({
+      ...prev,
+      imageMode: mode,
+      inputData: '',
+      imageFilename: ''
+    }))
+  }
+
+  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      setError('')
+      setFormData(prev => ({
+        ...prev,
+        inputData: '',
+        imageFilename: ''
+      }))
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      setError('')
+      setFormData(prev => ({
+        ...prev,
+        inputData: result,
+        imageFilename: file.name
+      }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const renderImageInputPreview = (model: Model) => {
+    const value = model.inputData || ''
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      if (model.previewUrl || model.modelUrl) {
+        return (
+          <p className="text-sm text-gray-500 mb-4 break-all">画像ソース: {value}</p>
+        )
+      }
+
+      return (
+        <img
+          src={value}
+          alt="Input"
+          className="w-full h-32 object-cover rounded mb-4"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none'
+          }}
+        />
+      )
+    }
+
+    if (value.startsWith('data:')) {
+      return (
+        <p className="text-sm text-gray-500 mb-4">アップロード画像（非公開）</p>
+      )
+    }
+
+    if (value.startsWith('upload:')) {
+      const name = value.slice('upload:'.length) || 'image'
+      return (
+        <p className="text-sm text-gray-500 mb-4">アップロード画像: {name}</p>
+      )
+    }
+
+    return (
+      <p className="text-sm text-gray-500 mb-4 break-all">画像ソース: {value}</p>
+    )
   }
 
   const handleDelete = async (modelId: string) => {
@@ -323,7 +436,16 @@ export default function DashboardPage() {
                   <select
                     id="dash-input-type"
                     value={formData.inputType}
-                    onChange={(e) => setFormData({ ...formData, inputType: e.target.value as 'TEXT' | 'IMAGE' })}
+                    onChange={(e) => {
+                      const value = e.target.value as 'TEXT' | 'IMAGE'
+                      setFormData(prev => ({
+                        ...prev,
+                        inputType: value,
+                        inputData: '',
+                        imageMode: value === 'IMAGE' ? 'UPLOAD' : 'URL',
+                        imageFilename: ''
+                      }))
+                    }}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
                     <option value="TEXT">テキスト</option>
@@ -332,8 +454,21 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <label htmlFor={formData.inputType === 'TEXT' ? 'dash-input-text' : 'dash-input-url'} className="block text-sm font-medium text-gray-700">
-                    {formData.inputType === 'TEXT' ? 'テキストプロンプト' : '画像URL'}
+                  <label
+                    htmlFor={
+                      formData.inputType === 'TEXT'
+                        ? 'dash-input-text'
+                        : formData.imageMode === 'UPLOAD'
+                          ? 'dash-input-file'
+                          : 'dash-input-url'
+                    }
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    {formData.inputType === 'TEXT'
+                      ? 'テキストプロンプト'
+                      : formData.imageMode === 'UPLOAD'
+                        ? '画像ファイル'
+                        : '画像URL'}
                   </label>
                   {formData.inputType === 'TEXT' ? (
                     <textarea
@@ -346,15 +481,51 @@ export default function DashboardPage() {
                       placeholder="例: 青いスポーツカー、光沢のある表面、リアルなディテール"
                     />
                   ) : (
-                    <input
-                      id="dash-input-url"
-                      type="url"
-                      value={formData.inputData}
-                      onChange={(e) => setFormData({ ...formData, inputData: e.target.value })}
-                      required
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="https://example.com/image.jpg"
-                    />
+                    <>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleImageModeChange('UPLOAD')}
+                          className={`px-3 py-1 rounded-md border transition ${formData.imageMode === 'UPLOAD' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                        >
+                          画像をアップロード
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleImageModeChange('URL')}
+                          className={`px-3 py-1 rounded-md border transition ${formData.imageMode === 'URL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                        >
+                          URL を入力
+                        </button>
+                      </div>
+
+                      {formData.imageMode === 'URL' ? (
+                        <input
+                          id="dash-input-url"
+                          type="url"
+                          value={formData.inputData}
+                          onChange={(e) => setFormData({ ...formData, inputData: e.target.value })}
+                          required={formData.imageMode === 'URL'}
+                          className="mt-3 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="https://example.com/image.jpg"
+                        />
+                      ) : (
+                        <div key={`upload-${formData.imageFilename || 'empty'}`} className="mt-3">
+                          <input
+                            id="dash-input-file"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageFileChange}
+                            className="block w-full text-sm text-gray-700"
+                          />
+                          {formData.imageFilename ? (
+                            <p className="mt-2 text-sm text-gray-600">選択中: {formData.imageFilename}</p>
+                          ) : (
+                            <p className="mt-2 text-sm text-gray-500">PNG/JPEG/WebP などの画像ファイルを選択してください</p>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -488,20 +659,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={() => {
                       setShowCreateForm(false)
-                      setFormData({ 
-                        title: '', 
-                        description: '', 
-                        inputType: 'TEXT', 
-                        inputData: '',
-                        width: '',
-                        height: '',
-                        depth: '',
-                        material: '',
-                        color: '',
-                        style: '',
-                        quality: 'medium',
-                        texture: false
-                      })
+                      setFormData(createInitialFormData())
                     }}
                     disabled={submitting}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
@@ -565,14 +723,7 @@ export default function DashboardPage() {
                   {model.inputType === 'TEXT' ? (
                     <p className="text-sm text-gray-500 mb-4 line-clamp-3">{model.inputData}</p>
                   ) : (
-                    <img 
-                      src={model.inputData} 
-                      alt="Input" 
-                      className="w-full h-32 object-cover rounded mb-4"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
+                    renderImageInputPreview(model)
                   )}
                   
                   {model.status === 'COMPLETED' && model.modelUrl && (
