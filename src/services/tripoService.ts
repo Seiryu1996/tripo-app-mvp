@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { ModelService } from './modelService'
 import { StorageService } from './storageService'
 
@@ -22,24 +23,99 @@ export interface TripoResponse {
   data: TripoTaskData
 }
 
+interface TripoUploadResponse {
+  code: number
+  data?: {
+    image_token?: string
+  }
+}
+
 export class TripoService {
   private static apiKey = process.env.TRIPO_API_KEY
   private static apiUrl = process.env.TRIPO_API_URL
 
-  static async startGeneration(modelId: string, inputType: 'TEXT' | 'IMAGE', inputData: string, options?: { texture?: boolean }): Promise<void> {
+  static async startGeneration(
+    modelId: string,
+    inputType: 'TEXT' | 'IMAGE',
+    inputData: string,
+    options?: { texture?: boolean; imageFile?: { url?: string; type?: string; fileToken?: string } }
+  ): Promise<boolean> {
     try {
       await ModelService.updateStatus(modelId, 'PROCESSING')
 
       if (!this.apiKey || !this.apiUrl) {
         console.error('[Tripo] Missing API configuration')
         await ModelService.updateStatus(modelId, 'FAILED')
-        return
+        return false
       }
 
-      const payload = inputType === 'TEXT' 
-        ? { type: 'text_to_model', prompt: inputData, texture: options?.texture || false }
-        : { type: 'image_to_model', file: inputData, texture: options?.texture || false }
+      let response: Response
+      let data: TripoResponse | null = null
 
+      const payload: Record<string, any> = {
+        type: inputType === 'TEXT' ? 'text_to_model' : 'image_to_model',
+      }
+
+      if (inputType === 'TEXT') {
+        payload.prompt = inputData
+      } else {
+        const file = options?.imageFile ?? {}
+        payload.file = {}
+
+        if (file.fileToken) {
+          payload.file.file_token = file.fileToken
+        } else if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
+          payload.file.url = file.url
+        } else if (inputData.startsWith('http://') || inputData.startsWith('https://')) {
+          payload.file.url = inputData
+        } else {
+          throw new Error('Image generation requires an accessible image URL or file_token')
+        }
+
+        if (file.type) {
+          payload.file.type = file.type
+        }
+      }
+
+      if (options?.texture !== undefined) {
+        payload.texture = options.texture
+      }
+
+      const taskResult = await this.createTaskWithRetry(payload)
+      response = taskResult.response
+      data = taskResult.data
+      if (!response.ok && taskResult.rawText) {
+        console.error('[Tripo] Raw response text:', taskResult.rawText)
+      }
+
+      if (response.ok && data?.code === 0 && data.data?.task_id) {
+        const taskId = data.data.task_id
+        await ModelService.setTripoTaskId(modelId, taskId)
+        this.pollTask(modelId, taskId)
+        return true
+      } else {
+        console.error(`[Tripo] Task creation failed:`, data)
+        try {
+          console.error('[Tripo] Task failure raw:', JSON.stringify(data))
+        } catch {}
+        await ModelService.updateStatus(modelId, 'FAILED')
+        return false
+      }
+
+    } catch (error) {
+      console.error('[Tripo] Generation error:', error)
+      await ModelService.updateStatus(modelId, 'FAILED')
+      return false
+    }
+
+    return false
+  }
+
+  private static async createTaskWithRetry(
+    payload: Record<string, any>,
+    attempt = 1
+  ): Promise<{ response: Response; data: TripoResponse | null; rawText?: string }> {
+    try {
       const response = await fetch(`${this.apiUrl}/task`, {
         method: 'POST',
         headers: {
@@ -49,21 +125,105 @@ export class TripoService {
         body: JSON.stringify(payload)
       })
 
-      const data: TripoResponse = await response.json()
-
-      if (response.ok && data.code === 0 && data.data?.task_id) {
-        const taskId = data.data.task_id
-        await ModelService.setTripoTaskId(modelId, taskId)
-        this.pollTask(modelId, taskId)
-      } else {
-        console.error(`[Tripo] Task creation failed:`, data)
-        await ModelService.updateStatus(modelId, 'FAILED')
+      let data: TripoResponse | null = null
+      let rawText: string | undefined
+      try {
+        rawText = await response.text()
+        data = rawText ? JSON.parse(rawText) : null
+      } catch (parseError) {
+        console.error('[Tripo] Failed to parse response JSON:', parseError)
       }
 
-    } catch (error) {
-      console.error('[Tripo] Generation error:', error)
-      await ModelService.updateStatus(modelId, 'FAILED')
+      return { response, data, rawText }
+
+    } catch (error: any) {
+      if (this.shouldRetry(error) && attempt < 3) {
+        const waitMs = 1000 * attempt
+        console.warn(`[Tripo] Request failed (attempt ${attempt}), retrying in ${waitMs}ms`, error)
+        await new Promise(resolve => setTimeout(resolve, waitMs))
+        return this.createTaskWithRetry(payload, attempt + 1)
+      }
+
+      throw error
     }
+  }
+
+  private static extensionFromContentType(contentType?: string | null) {
+    if (!contentType) return ''
+    const map: Record<string, string> = {
+      'image/png': '.png',
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/webp': '.webp',
+      'image/gif': '.gif'
+    }
+    return map[contentType.toLowerCase()] || ''
+  }
+
+  private static sanitizeUploadFilename(filename?: string, contentType?: string) {
+    const fallback = 'upload'
+    const extension = this.extensionFromContentType(contentType) || '.png'
+    const name = (filename || fallback).trim().replace(/[^a-zA-Z0-9._-]/g, '_') || fallback
+    if (name.includes('.')) {
+      return name
+    }
+    return `${name}${extension}`
+  }
+
+  static async uploadImageDataUri(dataUri: string, filename?: string) {
+    if (!this.apiKey || !this.apiUrl) {
+      throw new Error('Tripo API credentials are not configured')
+    }
+
+    const match = dataUri.match(/^data:(.*?);base64,(.*)$/)
+    if (!match) {
+      throw new Error('Invalid data URI format')
+    }
+
+    const contentType = match[1] || 'image/png'
+    const base64 = match[2]
+    const buffer = Buffer.from(base64, 'base64')
+    const safeFilename = this.sanitizeUploadFilename(filename, contentType)
+
+    const formData = new FormData()
+    formData.append('file', new Blob([buffer], { type: contentType }), safeFilename)
+
+    const response = await fetch(`${this.apiUrl}/upload/sts`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: formData
+    })
+
+    const rawText = await response.text()
+    let data: TripoUploadResponse | null = null
+
+    try {
+      data = rawText ? JSON.parse(rawText) : null
+    } catch (error) {
+      console.error('[Tripo] Failed to parse upload response:', error, rawText)
+      throw new Error('Failed to parse upload response from Tripo')
+    }
+
+    if (!response.ok || !data || data.code !== 0 || !data.data?.image_token) {
+      console.error('[Tripo] Upload failed:', data)
+      throw new Error('Tripo image upload failed')
+    }
+
+    return {
+      fileToken: data.data.image_token,
+      contentType,
+    }
+  }
+
+  private static shouldRetry(error: any): boolean {
+    if (!error) return false
+    const code = error?.code || error?.cause?.code
+    return code === 'UND_ERR_CONNECT_TIMEOUT' ||
+           code === 'UND_ERR_SOCKET' ||
+           code === 'ECONNRESET' ||
+           code === 'ETIMEDOUT'
   }
 
   private static async pollTask(modelId: string, taskId: string): Promise<void> {
@@ -151,7 +311,8 @@ export class TripoService {
 
     } catch (error) {
       console.error('[Tripo] Polling error:', error)
-      setTimeout(() => this.pollTask(modelId, taskId), 60000)
+      const delay = this.shouldRetry(error) ? 5000 : 60000
+      setTimeout(() => this.pollTask(modelId, taskId), delay)
     }
   }
 }
