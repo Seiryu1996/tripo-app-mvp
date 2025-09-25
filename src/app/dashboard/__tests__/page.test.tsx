@@ -104,6 +104,10 @@ describe('DashboardPage', () => {
 
     await user.click(screen.getByRole('button', { name: '新しいモデルを作成' }))
     await user.selectOptions(screen.getByLabelText('入力タイプ'), 'IMAGE')
+    expect(screen.getByLabelText('画像ファイル')).toBeInTheDocument()
+
+    // URL 入力に切り替えてエラーパスを確認
+    await user.click(screen.getByRole('button', { name: 'URL を入力' }))
     expect(screen.getByPlaceholderText('https://example.com/image.jpg')).toBeInTheDocument()
 
     await user.type(screen.getByLabelText('タイトル'), 'err')
