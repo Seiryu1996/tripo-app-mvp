@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, within, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, within, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/navigation'
 import AdminPage from '../page'
@@ -19,12 +19,42 @@ const mockPush = jest.fn()
 const mockRouter = { push: mockPush }
 const iso = (d: Date) => d.toISOString()
 
+const mockAuthAdmin = (id = 'admin') => (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id, role: 'ADMIN' }) })
+const mockUsersResponse = (users: Array<{ id: string; email: string; name: string; role: string; createdAt: string }>) =>
+  (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users }) })
+const mockBalanceResponse = (credits = 120, details: Record<string, unknown> = { balance: 120 }) =>
+  (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ credits, details }) })
+
 describe('AdminPage', () => {
+  const originalConfirm = window.confirm
+
+  beforeAll(() => {
+    Object.defineProperty(window, 'confirm', {
+      configurable: true,
+      writable: true,
+      value: jest.fn()
+    })
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     mockLocalStorage.getItem.mockReturnValue('token')
     ;(fetch as jest.Mock).mockReset()
+  })
+
+  afterEach(() => {
+    if (typeof window.confirm === 'function' && 'mockClear' in window.confirm) {
+      (window.confirm as unknown as jest.Mock).mockClear()
+    }
+  })
+
+  afterAll(() => {
+    Object.defineProperty(window, 'confirm', {
+      configurable: true,
+      writable: true,
+      value: originalConfirm
+    })
   })
 
   test('トークンが無い場合はログインへリダイレクト', async () => {
@@ -53,20 +83,19 @@ describe('AdminPage', () => {
   })
 
   test('初期ロードでユーザー一覧を表示', async () => {
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        users: [
-          { id: '1', email: 'a@example.com', name: 'A', role: 'ADMIN', createdAt: iso(new Date()) },
-          { id: '2', email: 'b@example.com', name: 'B', role: 'USER', createdAt: iso(new Date()) },
-        ],
-      }),
-    })
+    mockAuthAdmin()
+    mockUsersResponse([
+      { id: '1', email: 'a@example.com', name: 'A', role: 'ADMIN', createdAt: iso(new Date()) },
+      { id: '2', email: 'b@example.com', name: 'B', role: 'USER', createdAt: iso(new Date()) },
+    ])
+    mockBalanceResponse(200, { balance: 200, other: 'info' })
 
     render(<AdminPage />)
 
     await waitFor(() => {
+      expect(screen.getByText('Tripo残クレジット')).toBeInTheDocument()
+      expect(screen.getByTestId('tripo-balance-value')).toHaveTextContent('200')
+      expect(screen.getByText('credits')).toBeInTheDocument()
       expect(screen.getByText('ユーザー管理')).toBeInTheDocument()
       expect(screen.getByText('A')).toBeInTheDocument()
       expect(screen.getByText('a@example.com')).toBeInTheDocument()
@@ -77,9 +106,150 @@ describe('AdminPage', () => {
     })
   })
 
+  test('Tripo残クレジット取得に失敗した場合にエラー表示', async () => {
+    mockAuthAdmin()
+    mockUsersResponse([])
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'エラー' }) })
+
+    render(<AdminPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Tripo残クレジット')).toBeInTheDocument()
+      expect(screen.getByTestId('tripo-balance-error')).toHaveTextContent('エラー')
+    })
+  })
+
+  test('Tripo残クレジット取得でネットワークエラー時にフォールバック文言表示', async () => {
+    mockAuthAdmin()
+    mockUsersResponse([])
+    ;(fetch as jest.Mock).mockRejectedValueOnce(new Error('network'))
+
+    render(<AdminPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Tripo残クレジット')).toBeInTheDocument()
+      expect(screen.getByTestId('tripo-balance-error')).toHaveTextContent('Tripo残クレジットの取得に失敗しました')
+    })
+  })
+
+  test('Tripo残クレジット取得でエラーJSONが壊れている場合でもフォールバック文言表示', async () => {
+    mockAuthAdmin()
+    mockUsersResponse([])
+    ;(fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => { throw new Error('bad json') }
+    })
+
+    render(<AdminPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Tripo残クレジット')).toBeInTheDocument()
+      expect(screen.getByTestId('tripo-balance-error')).toHaveTextContent('Tripo残クレジットの取得に失敗しました')
+    })
+  })
+
+  test('Tripo残クレジット取得でエラーJSONにメッセージが無い場合はデフォルト文言', async () => {
+    mockAuthAdmin()
+    mockUsersResponse([])
+    ;(fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({})
+    })
+
+    render(<AdminPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Tripo残クレジット')).toBeInTheDocument()
+      expect(screen.getByTestId('tripo-balance-error')).toHaveTextContent('Tripo残クレジットの取得に失敗しました')
+    })
+  })
+
+  test('Tripo残クレジット取得でコードが非0の場合はエラーメッセージを表示', async () => {
+    mockAuthAdmin()
+    mockUsersResponse([])
+    ;(fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'Tripo残クレジットの取得に失敗しました (API error)' })
+    })
+
+    render(<AdminPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Tripo残クレジット')).toBeInTheDocument()
+      expect(screen.getByTestId('tripo-balance-error')).toHaveTextContent('Tripo残クレジットの取得に失敗しました (API error)')
+    })
+  })
+
+  test('残クレジットを再取得ボタンで更新できる', async () => {
+    const user = userEvent.setup()
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse(50, { balance: 50 })
+
+    render(<AdminPage />)
+
+    await waitFor(() => expect(screen.getByTestId('tripo-balance-value')).toHaveTextContent('50'))
+
+    mockBalanceResponse(75, { balance: 75 })
+
+    await user.click(screen.getByRole('button', { name: 'Tripo残クレジットを再取得' }))
+
+    await waitFor(() => expect(screen.getByTestId('tripo-balance-value')).toHaveTextContent('75'))
+
+    const balanceFetchCalls = (fetch as jest.Mock).mock.calls.filter(([url]) => url === '/api/admin/tripo/balance')
+    expect(balanceFetchCalls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('残クレジット再取得時にトークンが無い場合はエラーメッセージ表示', async () => {
+    const user = userEvent.setup()
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse(60, { balance: 60 })
+
+    render(<AdminPage />)
+    await waitFor(() => expect(screen.getByTestId('tripo-balance-value')).toHaveTextContent('60'))
+
+    mockLocalStorage.getItem.mockImplementation(() => null)
+
+    await user.click(screen.getByRole('button', { name: 'Tripo残クレジットを再取得' }))
+
+    await waitFor(() => expect(screen.getByTestId('tripo-balance-error')).toHaveTextContent('認証情報が見つかりません'))
+  })
+
+  test('新規ユーザー作成ボタンでフォームを開閉すると入力がリセットされる', async () => {
+    const user = userEvent.setup()
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
+
+    render(<AdminPage />)
+
+    const header = (await screen.findByRole('heading', { name: 'ユーザー管理' })).closest('div') as HTMLElement
+    await user.click(within(header).getByRole('button', { name: '新規ユーザー作成' }))
+
+    await screen.findByRole('heading', { name: '新規ユーザー作成' })
+
+    const nameInput = screen.getByPlaceholderText('田中太郎') as HTMLInputElement
+    const emailInput = screen.getByPlaceholderText('user@example.com') as HTMLInputElement
+
+    await user.type(nameInput, 'Temp User')
+    await user.type(emailInput, 'temp@example.com')
+
+    await user.click(within(header).getByRole('button', { name: 'キャンセル' }))
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '新規ユーザー作成' })).not.toBeInTheDocument())
+
+    await user.click(within(header).getByRole('button', { name: '新規ユーザー作成' }))
+    await screen.findByRole('heading', { name: '新規ユーザー作成' })
+
+    expect(screen.getByPlaceholderText('田中太郎')).toHaveValue('')
+    expect(screen.getByPlaceholderText('user@example.com')).toHaveValue('')
+  })
+
   test('ユーザー一覧APIがok=falseでも処理が継続する（else分岐）', async () => {
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
+    mockAuthAdmin()
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => {
@@ -90,8 +260,9 @@ describe('AdminPage', () => {
 
   test('「新規ユーザー作成」の表示・作成成功で一覧更新', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('ユーザー管理'))
@@ -104,7 +275,7 @@ describe('AdminPage', () => {
     await user.type(screen.getByPlaceholderText('パスワードを設定'), 'P@ssw0rd!')
     
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'x', email: 'new@example.com', name: 'New User', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockUsersResponse([{ id: 'x', email: 'new@example.com', name: 'New User', role: 'USER', createdAt: iso(new Date()) }])
 
     await user.click(screen.getByRole('button', { name: '作成' }))
 
@@ -117,8 +288,9 @@ describe('AdminPage', () => {
 
   test('作成時にネットワークエラーでキャッチ分岐を通る', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('ユーザー管理'))
@@ -133,8 +305,9 @@ describe('AdminPage', () => {
 
   test('編集ボタンでフォームに値を反映し、更新成功で閉じる', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'old@example.com', name: 'Old', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'old@example.com', name: 'Old', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('Old'))
@@ -151,7 +324,7 @@ describe('AdminPage', () => {
     await user.type(nameInput, 'Updated')
 
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'old@example.com', name: 'Updated', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockUsersResponse([{ id: 'u1', email: 'old@example.com', name: 'Updated', role: 'USER', createdAt: iso(new Date()) }])
 
     await user.click(screen.getByRole('button', { name: '更新' }))
 
@@ -163,8 +336,9 @@ describe('AdminPage', () => {
 
   test('作成時はパスワード必須、編集時は任意', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'a@example.com', name: 'A', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'a@example.com', name: 'A', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('ユーザー管理'))
@@ -182,8 +356,9 @@ describe('AdminPage', () => {
 
   test('作成失敗でエラーメッセージ表示、更新失敗でも表示', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
 
     const { unmount } = render(<AdminPage />)
     await waitFor(() => screen.getByText('ユーザー管理'))
@@ -199,8 +374,9 @@ describe('AdminPage', () => {
     unmount()
     cleanup()
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'a@example.com', name: 'A', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'a@example.com', name: 'A', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
     
     render(<AdminPage />)
     await waitFor(() => screen.getByText('A'))
@@ -212,8 +388,9 @@ describe('AdminPage', () => {
 
   test('作成失敗（エラー文言なし）でフォールバックの「操作に失敗しました」を表示', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('ユーザー管理'))
@@ -231,8 +408,9 @@ describe('AdminPage', () => {
   test('削除の確認ダイアログでOK時は削除API、キャンセル時は呼ばない', async () => {
     const user = userEvent.setup()
     const confirmSpy = jest.spyOn(window, 'confirm')
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('X'))
@@ -243,7 +421,7 @@ describe('AdminPage', () => {
 
     confirmSpy.mockReturnValueOnce(true)
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+    mockUsersResponse([])
     await user.click(screen.getByRole('button', { name: '削除' }))
     await waitFor(() => {
       expect((fetch as jest.Mock).mock.calls.some(([, opts]) => (opts as any)?.method === 'DELETE')).toBe(true)
@@ -255,8 +433,9 @@ describe('AdminPage', () => {
   test('削除失敗時にエラーメッセージ表示', async () => {
     const user = userEvent.setup()
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('X'))
@@ -270,11 +449,12 @@ describe('AdminPage', () => {
 
   test('自分の削除クリックでエラーメッセージ表示、confirm/DELETE は呼ばれない', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [
+    mockAuthAdmin('u1')
+    mockUsersResponse([
       { id: 'u1', email: 'self@example.com', name: 'Self', role: 'ADMIN', createdAt: iso(new Date()) },
       { id: 'u2', email: 'other@example.com', name: 'Other', role: 'USER', createdAt: iso(new Date()) },
-    ] }) })
+    ])
+    mockBalanceResponse()
 
     const confirmSpy = jest.spyOn(window, 'confirm')
 
@@ -295,10 +475,11 @@ describe('AdminPage', () => {
   test('削除APIが返すエラー文言（自己削除禁止）を画面に表示する', async () => {
     const user = userEvent.setup()
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [
+    mockAuthAdmin()
+    mockUsersResponse([
       { id: 'u2', email: 'other@example.com', name: 'Other', role: 'USER', createdAt: iso(new Date()) },
-    ] }) })
+    ])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('Other'))
@@ -314,10 +495,11 @@ describe('AdminPage', () => {
   test('削除APIのレスポンスで json() が失敗した場合のフォールバック文言表示', async () => {
     const user = userEvent.setup()
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [
+    mockAuthAdmin()
+    mockUsersResponse([
       { id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) },
-    ] }) })
+    ])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('X'))
@@ -333,8 +515,9 @@ describe('AdminPage', () => {
   test('削除時にネットワークエラーでキャッチ分岐を通る', async () => {
     const user = userEvent.setup()
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'x@example.com', name: 'X', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('X'))
@@ -346,8 +529,9 @@ describe('AdminPage', () => {
 
   test('権限変更（USER→ADMIN）の更新が反映される', async () => {
     const user = userEvent.setup()
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'role@example.com', name: 'RoleUser', role: 'USER', createdAt: iso(new Date()) }] }) })
+    mockAuthAdmin()
+    mockUsersResponse([{ id: 'u1', email: 'role@example.com', name: 'RoleUser', role: 'USER', createdAt: iso(new Date()) }])
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => screen.getByText('RoleUser'))
@@ -357,15 +541,16 @@ describe('AdminPage', () => {
     await user.selectOptions(roleSelect, 'ADMIN')
 
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [{ id: 'u1', email: 'role@example.com', name: 'RoleUser', role: 'ADMIN', createdAt: iso(new Date()) }] }) })
+    mockUsersResponse([{ id: 'u1', email: 'role@example.com', name: 'RoleUser', role: 'ADMIN', createdAt: iso(new Date()) }])
 
     await user.click(screen.getByRole('button', { name: '更新' }))
     await waitFor(() => expect(screen.getByText('管理者')).toBeInTheDocument())
   })
 
   test('ユーザー一覧取得エラーでエラーメッセージ表示', async () => {
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'admin', role: 'ADMIN' }) })
+    mockAuthAdmin()
     ;(fetch as jest.Mock).mockRejectedValueOnce(new Error('network'))
+    mockBalanceResponse()
 
     render(<AdminPage />)
     await waitFor(() => expect(screen.getByText('ユーザー一覧の取得に失敗しました')).toBeInTheDocument())

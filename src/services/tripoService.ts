@@ -30,6 +30,17 @@ interface TripoUploadResponse {
   }
 }
 
+interface TripoBalanceResponse {
+  code?: number
+  message?: string
+  data?: Record<string, unknown>
+}
+
+export interface TripoBalanceResult {
+  credits: number | null
+  details: Record<string, unknown> | null
+}
+
 export class TripoService {
   private static apiKey = process.env.TRIPO_API_KEY
   private static apiUrl = process.env.TRIPO_API_URL
@@ -168,6 +179,88 @@ export class TripoService {
       return name
     }
     return `${name}${extension}`
+  }
+
+  private static extractCreditValue(details: Record<string, unknown> | null | undefined): number | null {
+    if (!details) {
+      return null
+    }
+
+    const candidateKeys = ['balance', 'credit', 'credits', 'remaining', 'left', 'available']
+
+    for (const key of candidateKeys) {
+      const value = details[key]
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value
+      }
+      if (typeof value === 'string') {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed)) {
+          return parsed
+        }
+      }
+    }
+
+    return null
+  }
+
+  static async getBalance(): Promise<TripoBalanceResult> {
+    if (!this.apiKey || !this.apiUrl) {
+      throw new Error('Tripo API credentials are not configured')
+    }
+
+    const endpoint = this.apiUrl.endsWith('/')
+      ? `${this.apiUrl}user/balance`
+      : `${this.apiUrl}/user/balance`
+
+    let response: Response
+    let rawText: string | undefined
+    let parsed: TripoBalanceResponse | null = null
+
+    try {
+      response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    } catch (error) {
+      console.error('[Tripo] Balance request network error:', error)
+      throw new Error('Tripo残クレジットの取得に失敗しました')
+    }
+
+    try {
+      rawText = await response.text()
+      parsed = rawText ? JSON.parse(rawText) : null
+    } catch (error) {
+      console.error('[Tripo] Failed to parse balance response JSON:', error)
+      console.error('[Tripo] Balance raw response:', rawText)
+    }
+
+    if (!response.ok) {
+      const statusText = parsed?.message || response.statusText || 'Unknown error'
+      console.error(`[Tripo] Balance request failed with status ${response.status}:`, rawText)
+      throw new Error(`Tripo残クレジットの取得に失敗しました (${statusText})`)
+    }
+
+    if (!parsed) {
+      throw new Error('Tripo残クレジットの取得に失敗しました (Invalid response)')
+    }
+
+    if (parsed.code !== undefined && parsed.code !== 0 && parsed.code !== 200) {
+      const message = parsed.message || 'Unknown error'
+      console.error('[Tripo] Balance API error:', parsed)
+      throw new Error(`Tripo残クレジットの取得に失敗しました (${message})`)
+    }
+
+    const details = parsed.data ?? null
+    const credits = this.extractCreditValue(details)
+
+    return {
+      credits,
+      details
+    }
   }
 
   static async uploadImageDataUri(dataUri: string, filename?: string) {
