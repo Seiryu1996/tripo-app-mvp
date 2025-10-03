@@ -97,7 +97,7 @@ describe('DashboardPage', () => {
   test('入力タイプ切り替え（TEXT→IMAGE）とエラー表示（作成/削除失敗）', async () => {
     const user = userEvent.setup()
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
-    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ id: 'd1', title: 'toDel', description: '', inputType: 'TEXT', inputData: 'x', status: 'PENDING', createdAt: isoMinutesAgo(1) }] }) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ id: 'd1', title: 'toDel', description: '', inputType: 'TEXT', inputData: 'x', status: 'COMPLETED', createdAt: isoMinutesAgo(1) }] }) })
 
     render(<DashboardPage />)
     await waitFor(() => screen.getByText('マイモデル'))
@@ -161,7 +161,7 @@ describe('DashboardPage', () => {
     ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
     ;(fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ models: [{ id: 'mid', title: 'deleteme', description: '', inputType: 'TEXT', inputData: 'x', status: 'PENDING', createdAt: isoMinutesAgo(1) }] }),
+      json: async () => ({ models: [{ id: 'mid', title: 'deleteme', description: '', inputType: 'TEXT', inputData: 'x', status: 'COMPLETED', createdAt: isoMinutesAgo(1) }] }),
     })
 
     render(<DashboardPage />)
@@ -177,6 +177,20 @@ describe('DashboardPage', () => {
     })
 
     confirmSpy.mockRestore()
+  })
+
+  test('処理中モデルの削除ボタンは無効', async () => {
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ models: [{ id: 'locked', title: 'processing', description: '', inputType: 'TEXT', inputData: 'x', status: 'PROCESSING', createdAt: isoMinutesAgo(1) }] }),
+    })
+
+    render(<DashboardPage />)
+
+    const deleteButton = await screen.findByRole('button', { name: '削除' })
+    expect(deleteButton).toBeDisabled()
+    expect(deleteButton).toHaveAttribute('title', '生成中のモデルは削除できません')
   })
 
   test('完了モデルのダウンロード成功と失敗', async () => {
