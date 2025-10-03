@@ -271,12 +271,19 @@ export default function DashboardPage() {
     )
   }
 
-  const handleDelete = async (modelId: string) => {
+  const isModelLocked = (status: Model['status']) => status === 'PENDING' || status === 'PROCESSING'
+
+  const handleDelete = async (model: Model) => {
+    if (isModelLocked(model.status)) {
+      setError('生成中のモデルは削除できません')
+      return
+    }
+
     if (!confirm('このモデルを削除しますか？')) return
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/models/${modelId}`, {
+      const response = await fetch(`/api/models/${model.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -702,8 +709,10 @@ export default function DashboardPage() {
                         {getStatusText(model.status)}
                       </span>
                       <button
-                        onClick={() => handleDelete(model.id)}
-                        className="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded border border-red-600 hover:bg-red-50"
+                        onClick={() => handleDelete(model)}
+                        disabled={isModelLocked(model.status)}
+                        title={isModelLocked(model.status) ? '生成中のモデルは削除できません' : ''}
+                        className="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded border border-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-red-600 disabled:hover:bg-transparent"
                       >
                         削除
                       </button>
