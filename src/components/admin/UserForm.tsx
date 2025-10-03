@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { AdminUserFormData } from './types'
+import { MAX_ADMIN_NAME_LENGTH, MAX_EMAIL_LENGTH, MAX_PASSWORD_LENGTH } from '@/lib/inputLimits'
 
 interface UserFormProps {
   formData: AdminUserFormData
@@ -17,7 +18,7 @@ export default function UserForm({ formData, editing, onChange, onSubmit, onCanc
       <h3 className="text-lg font-medium mb-4">
         {editing ? 'ユーザー編集' : '新規ユーザー作成'}
       </h3>
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form noValidate onSubmit={onSubmit} className="space-y-4">
         <div>
           <label htmlFor="admin-name" className="block text-sm font-medium text-gray-700">名前</label>
           <input
@@ -28,6 +29,7 @@ export default function UserForm({ formData, editing, onChange, onSubmit, onCanc
             required
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder="田中太郎"
+            maxLength={MAX_ADMIN_NAME_LENGTH}
           />
         </div>
         <div>
@@ -40,6 +42,7 @@ export default function UserForm({ formData, editing, onChange, onSubmit, onCanc
             required
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder="user@example.com"
+            maxLength={MAX_EMAIL_LENGTH}
           />
         </div>
         <div>
@@ -54,6 +57,7 @@ export default function UserForm({ formData, editing, onChange, onSubmit, onCanc
             required={!editing}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder={editing ? '変更する場合のみ入力' : 'パスワードを設定'}
+            maxLength={MAX_PASSWORD_LENGTH}
           />
         </div>
         <div>

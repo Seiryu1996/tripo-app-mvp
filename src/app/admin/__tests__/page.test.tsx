@@ -3,6 +3,7 @@ import { render, screen, waitFor, within, cleanup } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/navigation'
 import AdminPage from '../page'
+import { MAX_ADMIN_NAME_LENGTH, MAX_EMAIL_LENGTH, MAX_PASSWORD_LENGTH } from '@/lib/inputLimits'
 
 jest.mock('@/components/Navigation', () => () => <nav data-testid="navigation" />)
 jest.mock('next/navigation', () => ({ useRouter: jest.fn() }))
@@ -244,6 +245,101 @@ describe('AdminPage', () => {
 
     expect(screen.getByPlaceholderText('田中太郎')).toHaveValue('')
     expect(screen.getByPlaceholderText('user@example.com')).toHaveValue('')
+  })
+
+  test('ユーザー作成フォームの入力値が最大長でトリミングされる', async () => {
+    const user = userEvent.setup()
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
+
+    render(<AdminPage />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '新規ユーザー作成' })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: '新規ユーザー作成' }))
+
+    const nameInput = screen.getByLabelText('名前') as HTMLInputElement
+    const emailInput = screen.getByLabelText('メールアドレス') as HTMLInputElement
+    const passwordInput = screen.getByLabelText('パスワード') as HTMLInputElement
+
+    await user.type(nameInput, 'n'.repeat(MAX_ADMIN_NAME_LENGTH + 50))
+    await user.type(emailInput, 'user@example.com')
+    await user.type(emailInput, 'x'.repeat(MAX_EMAIL_LENGTH))
+    await user.type(passwordInput, 'p'.repeat(MAX_PASSWORD_LENGTH + 30))
+
+    expect(nameInput.value.length).toBe(MAX_ADMIN_NAME_LENGTH)
+    expect(emailInput.value.length).toBeLessThanOrEqual(MAX_EMAIL_LENGTH)
+    expect(passwordInput.value.length).toBe(MAX_PASSWORD_LENGTH)
+  })
+
+  test('ユーザー作成時にメールアドレスの前後スペースが除去されて送信される', async () => {
+    const user = userEvent.setup()
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
+
+    render(<AdminPage />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '新規ユーザー作成' })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: '新規ユーザー作成' }))
+
+    await user.type(screen.getByLabelText('名前'), '新規ユーザー ')
+    await user.type(screen.getByLabelText('メールアドレス'), '  new-user@example.com  ')
+    await user.type(screen.getByLabelText('パスワード'), 'password123')
+
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ users: [] }) })
+
+    await user.click(screen.getByRole('button', { name: '作成' }))
+
+    await waitFor(() => {
+      expect(
+        (fetch as jest.Mock).mock.calls.some(
+          ([url, options]) =>
+            String(url) === '/api/admin/users' && (options as RequestInit | undefined)?.method === 'POST',
+        ),
+      ).toBe(true)
+    })
+
+    const postCall = (fetch as jest.Mock).mock.calls.find(
+      ([url, options]) =>
+        String(url) === '/api/admin/users' && (options as RequestInit | undefined)?.method === 'POST',
+    ) as [string, RequestInit]
+
+    const payload = JSON.parse(postCall[1].body as string)
+
+    expect(payload.email).toBe('new-user@example.com')
+    expect(payload.name).toBe('新規ユーザー')
+  })
+
+  test('空白のみのメールで送信するとエラーになる', async () => {
+    const user = userEvent.setup()
+    mockAuthAdmin()
+    mockUsersResponse([])
+    mockBalanceResponse()
+
+    render(<AdminPage />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '新規ユーザー作成' })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: '新規ユーザー作成' }))
+
+    await user.type(screen.getByLabelText('名前'), 'ユーザー')
+    await user.type(screen.getByLabelText('メールアドレス'), '   ')
+    await user.type(screen.getByLabelText('パスワード'), 'password123')
+
+    await user.click(screen.getByRole('button', { name: '作成' }))
+
+    await screen.findByText('メールアドレスは必須です')
+
+    const postRequests = (fetch as jest.Mock).mock.calls.filter(
+      ([url, options]) =>
+        String(url) === '/api/admin/users' && (options as RequestInit | undefined)?.method === 'POST',
+    )
+
+    expect(postRequests.length).toBe(0)
   })
 
   test('ユーザー一覧APIがok=falseでも処理が継続する（else分岐）', async () => {

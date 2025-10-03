@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/navigation'
 import LoginPage from '../page'
 import { prisma } from '@/lib/prisma'
+import { MAX_EMAIL_LENGTH, MAX_PASSWORD_LENGTH } from '@/lib/inputLimits'
 import { 
   createTestUser, 
   createTestAdmin, 
@@ -346,6 +347,53 @@ describe('LoginPage', () => {
       
       const emailInput = screen.getByLabelText('メールアドレス')
       expect(emailInput).toHaveAttribute('type', 'email')
+    })
+  })
+
+  describe('入力制限', () => {
+    test('メールアドレスとパスワードの入力値が最大長でトリミングされる', async () => {
+      const user = userEvent.setup()
+      render(<LoginPage />)
+
+      const emailInput = screen.getByLabelText('メールアドレス') as HTMLInputElement
+      const passwordInput = screen.getByLabelText('パスワード') as HTMLInputElement
+
+      await user.type(emailInput, 'a'.repeat(MAX_EMAIL_LENGTH + 10))
+      await user.type(passwordInput, 'p'.repeat(MAX_PASSWORD_LENGTH + 20))
+
+      expect(emailInput.value.length).toBe(MAX_EMAIL_LENGTH)
+      expect(passwordInput.value.length).toBe(MAX_PASSWORD_LENGTH)
+    })
+
+    test('送信時にメールアドレスの前後スペースが除去される', async () => {
+      const user = userEvent.setup()
+      ;(fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'trim-token',
+          user: { id: '1', role: 'USER', email: 'user@example.com' }
+        })
+      })
+
+      render(<LoginPage />)
+
+      const emailInput = screen.getByLabelText('メールアドレス')
+      const passwordInput = screen.getByLabelText('パスワード')
+
+      await user.type(emailInput, '  user@example.com  ')
+      await user.type(passwordInput, 'secret')
+
+      await user.click(screen.getByRole('button', { name: 'ログイン' }))
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith('/api/auth/login', expect.any(Object))
+      })
+
+      const [[calledUrl, requestInit]] = (fetch as jest.Mock).mock.calls
+      expect(calledUrl).toBe('/api/auth/login')
+      const body = JSON.parse((requestInit as RequestInit).body as string)
+
+      expect(body.email).toBe('user@example.com')
     })
   })
 
