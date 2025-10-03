@@ -193,6 +193,90 @@ describe('DashboardPage', () => {
     expect(deleteButton).toHaveAttribute('title', '生成中のモデルは削除できません')
   })
 
+  test('入力項目に上限文字数を設ける', async () => {
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
+
+    render(<DashboardPage />)
+    await waitFor(() => screen.getByText('マイモデル'))
+
+    fireEvent.click(screen.getByRole('button', { name: '新しいモデルを作成' }))
+
+    const titleInput = screen.getByLabelText('タイトル') as HTMLInputElement
+    fireEvent.change(titleInput, { target: { value: 'a'.repeat(130) } })
+    await waitFor(() => {
+      expect(titleInput.value.length).toBe(100)
+    })
+
+    const promptInput = screen.getByLabelText('テキストプロンプト') as HTMLTextAreaElement
+    fireEvent.change(promptInput, { target: { value: 'b'.repeat(2100) } })
+    await waitFor(() => {
+      expect(promptInput.value.length).toBe(2000)
+    })
+
+    const descriptionInput = screen.getByLabelText('説明（任意）') as HTMLTextAreaElement
+    fireEvent.change(descriptionInput, { target: { value: 'c'.repeat(1200) } })
+    await waitFor(() => {
+      expect(descriptionInput.value.length).toBe(1000)
+    })
+
+    const materialInput = screen.getByLabelText('材質') as HTMLInputElement
+    fireEvent.change(materialInput, { target: { value: 'm'.repeat(200) } })
+    await waitFor(() => {
+      expect(materialInput.value.length).toBe(120)
+    })
+  })
+
+  test('寸法の上限を超えるとエラー', async () => {
+    const user = userEvent.setup()
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
+
+    render(<DashboardPage />)
+    await waitFor(() => screen.getByText('マイモデル'))
+
+    await user.click(screen.getByRole('button', { name: '新しいモデルを作成' }))
+
+    fireEvent.change(screen.getByLabelText('タイトル'), { target: { value: 'valid title' } })
+    fireEvent.change(screen.getByLabelText('テキストプロンプト'), { target: { value: 'prompt' } })
+    fireEvent.change(screen.getByLabelText('幅（cm）'), { target: { value: '1500' } })
+
+    await user.click(screen.getByRole('button', { name: '生成開始' }))
+
+    await screen.findByText('幅は1000cm以下で入力してください')
+
+    const hasPost = (fetch as jest.Mock).mock.calls.some(
+      ([url, options]) =>
+        String(url).startsWith('/api/models') && (options as RequestInit | undefined)?.method === 'POST',
+    )
+
+    expect(hasPost).toBe(false)
+  })
+
+  test('大きすぎる画像ファイルは拒否される', async () => {
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'u1', role: 'USER' }) })
+    ;(fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
+
+    render(<DashboardPage />)
+    await waitFor(() => screen.getByText('マイモデル'))
+
+    fireEvent.click(screen.getByRole('button', { name: '新しいモデルを作成' }))
+    fireEvent.change(screen.getByLabelText('タイトル'), { target: { value: 'image test' } })
+    fireEvent.change(screen.getByLabelText('テキストプロンプト'), { target: { value: 'placeholder' } })
+
+    fireEvent.change(screen.getByLabelText('入力タイプ'), { target: { value: 'IMAGE' } })
+
+    const fileInput = await screen.findByLabelText('画像ファイル') as HTMLInputElement
+    const largeFile = new File(['dummy'], 'large-image.png', { type: 'image/png' })
+    Object.defineProperty(largeFile, 'size', { value: 6 * 1024 * 1024 })
+
+    fireEvent.change(fileInput, { target: { files: [largeFile] } })
+
+    await waitFor(() => {
+      expect(screen.getByText('画像ファイルは最大5MBまでです')).toBeInTheDocument()
+    })
+  })
+
   test('完了モデルのダウンロード成功と失敗', async () => {
     const user = userEvent.setup()
     const createObjectURLMock = jest.fn().mockReturnValue('blob:mock')
